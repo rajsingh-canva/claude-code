@@ -1,75 +1,82 @@
 # Note Templates
 
-## Main Note Template
+All templates live in `~/TheBible/5 - Templates/`. **Always read the actual template file before creating a note** — never reproduce from memory.
 
-Use this template when creating new main (permanent) Zettelkasten notes:
+## Template Catalog
 
-```markdown
-{{date}} {{time}}
+### Zettelkasten Main Note Template.md
 
-Status:: #baby
-Tags:: [[tag1]] [[tag2]]
+- **When to use**: Atomic permanent notes — one core idea, under 500 words
+- **Frontmatter fields**: `Date`, `Status`, `Tags`
+- **Save to**: `Main Notes/`
 
-# {{title}}
+### Zettelkasten Source Note Template.md
 
-[Write your mini-essay here — one core idea, under 500 words, in your own words]
+- **When to use**: Taking notes on a specific book, article, video, or podcast
+- **Frontmatter fields**: `Date`, `Type`, `Medium`, `Author`, `Title`, `Tags`
+- **Save to**: `Source Material/`
 
----
+### Note Taking Template.md
 
-## References
+- **When to use**: General-purpose note-taking that doesn't fit Zettelkasten structure
+- **Frontmatter fields**: `Date`, `Tags`
+- **Save to**: `Rough Notes/`
 
-- [[Related Note 1]]
-- [[Related Note 2]]
-- [[Source Material Note]]
-```
+### Daily Note Template - {{Date.md
 
-### Field Guide
+- **When to use**: Daily journaling, task tracking, reflections
+- **Frontmatter fields**: `Date`, `Tags` (pre-filled: `[[Daily]]`, `[[Note]]`, `[[Tasks]]`)
+- **Save to**: `Rough Notes/`
 
-| Field | Purpose | Rules |
-|-------|---------|-------|
-| Date/Time | Auto-generated timestamp | Uses Obsidian template variables |
-| Status | Maturity tracking | `#baby`, `#child`, `#adult`, or `#quote` |
-| Tags | Topic categorization | `[[ ]]` links to empty tag-notes; max 4-5 |
-| Title | Note heading | Auto-populated from filename via `{{title}}` |
-| Body | The core idea | One idea, under 500 words, own words |
-| References | Links to related notes | Always include source material link |
+### Code Block Script Template.md
 
-## Source Note Template
+- **When to use**: Documenting code projects, scripts, or programming work
+- **Frontmatter fields**: `Date`, `Tags`
+- **Sections**: Goal, Version, Code, Missing Features, Git
+- **Save to**: `Rough Notes/`
 
-Use this template when taking notes on a specific book, article, video, or podcast:
+### Proof of Concept Template.md
 
-```markdown
-{{date}} {{time}}
+- **When to use**: Evaluating an idea — pros, cons, feasibility
+- **Frontmatter fields**: `Date`, `Tags`
+- **Sections**: Goal, Why, What, How, Solves, Misses, Related
+- **Save to**: `Rough Notes/`
 
-Type:: #source
-Medium:: [book/article/video/podcast]
-Author:: [Author name]
-Title:: [Full title of the work]
+### How to Guide Template.md
 
-# {{title}}
+- **When to use**: Step-by-step tutorials or how-to guides
+- **Frontmatter fields**: `Date`, `Tags`
+- **Sections**: Table of Contents, Heading, Subheading, Link, Steps
+- **Save to**: `Rough Notes/`
 
-## Key Ideas
+### Book Summary Template.md
 
-### [Page/timestamp] — [Brief label]
+- **When to use**: Summarizing book chapters or key themes
+- **Frontmatter fields**: `Date`, `Tags` (pre-filled: `[[Summary]]`)
+- **Sections**: Summary of Chapter, Key Themes
+- **Save to**: `Source Material/`
 
-> [Exact quote if relevant]
+### Listening Tour - Temporary Template.md
 
-[Your elaboration in your own words — what does this mean? what does it remind you of?]
+- **When to use**: Onboarding conversations, listening tours
+- **Frontmatter fields**: `Date`, `Tags` (pre-filled: `[[Canva]]`, `[[Listening Tour]]`, `[[Onboard]]`)
+- **Save to**: `Rough Notes/`
 
-### [Page/timestamp] — [Brief label]
+## Field Guide
 
-> [Quote]
+The user's templates use this frontmatter format (single colons, not double):
 
-[Elaboration]
+| Field | Format | Example |
+|-------|--------|---------|
+| Date | `Date:  {{Date}} {{Time}}` | Obsidian auto-fills on insert |
+| Status | `Status: #baby` | Maturity tag for Zettelkasten notes |
+| Tags | `Tags: [[tag1]] [[tag2]]` | Wiki-links to tag notes |
+| Type | `Type: #source` | Note type identifier |
+| Medium | `Medium: book` | book/article/video/podcast |
+| Author | `Author: Name` | Creator of source material |
+| Title | `Title: Full title` | Title of source material |
 
----
-
-## Main Notes Created
-
-- [[Main Note 1]]
-- [[Main Note 2]]
-```
-
-## Rough Note Template
-
-No formal template needed. Use plain text for fleeting thoughts, reminders, and lists.
+**Important format differences from the original skill templates**:
+- Single colons (`Status:`) not double colons (`Status::`)
+- Some templates have double-space before `{{Date}}` (e.g., `Date:  {{Date}} {{Time}}`)
+- Tags use `[[ ]]` wiki-links, not hashtags

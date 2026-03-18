@@ -31,9 +31,31 @@ The user's vault uses six folders:
 | `Main Notes/` | Finalized atomic Zettelkasten notes | Active |
 | `Tags/` | Empty notes used as tag targets | Background |
 | `Indexes/` | Structured "contents pages" for large topics | Background |
-| `Templates/` | Note templates | Background |
+| `5 - Templates/` | Note templates | Background |
 
 Main Notes is a flat folder — no subfolders. All permanent notes live together to enable cross-disciplinary connections.
+
+## Template Selection
+
+The user has 9 templates in `~/TheBible/5 - Templates/`. When creating any note, select the best template based on user intent:
+
+| User Intent | Template File | Signals |
+|-------------|--------------|---------|
+| Atomic idea / permanent note | `Zettelkasten Main Note Template.md` | "create a note about", single concept |
+| Notes on a book/article/video | `Zettelkasten Source Note Template.md` | "notes on [source]", "reading [book]" |
+| General note-taking | `Note Taking Template.md` | "take some notes", "jot down" |
+| Daily journaling | `Daily Note Template - {{Date.md` | "daily note", "journal", "today" |
+| Code project docs | `Code Block Script Template.md` | "code", "script", programming mentions |
+| Evaluating an idea | `Proof of Concept Template.md` | "proof of concept", "evaluate", "pros and cons" |
+| How-to / tutorial | `How to Guide Template.md` | "how to", "guide", "steps" |
+| Book chapter summary | `Book Summary Template.md` | "summarize chapter", "book summary" |
+| Onboarding conversation | `Listening Tour - Temporary Template.md` | "listening tour", "onboarding" |
+
+**Key rule**: Always read the actual template file from `~/TheBible/5 - Templates/` before creating a note. Never reproduce a template from memory.
+
+If the intent is ambiguous, ask the user which template to use.
+
+For template details and field guide, see [references/note-templates.md](references/note-templates.md).
 
 ## Workflows
 
@@ -43,24 +65,34 @@ When the user asks to create a note about a topic:
 
 1. Determine if the user has source material or is working from general knowledge
 2. If from source material, check if a source note exists; if not, create one first
-3. Create the main note using the template from [assets/main-note-template.md](assets/main-note-template.md)
-4. Write a mini-essay: one core idea, under 500 words, in the user's own voice
-5. Assign maturity status `#baby`
-6. Add 1-4 specific topical tags as `[[ ]]` links
-7. Add references section with links to related notes and source material
-8. Save to the user's `Main Notes/` folder
-
-For template details and field guide, see [references/note-templates.md](references/note-templates.md).
+3. Read the template from `~/TheBible/5 - Templates/Zettelkasten Main Note Template.md`
+4. Create the main note following the template structure
+5. Write a mini-essay: one core idea, under 500 words, in the user's own voice
+6. Assign maturity status `#baby`
+7. Add 1-4 specific topical tags as `[[ ]]` links
+8. Add references section with links to related notes and source material
+9. Save to the user's `Main Notes/` folder
 
 ### Creating a Source Note
 
 When the user is taking notes on specific material (book, article, video):
 
-1. Use the source note template from [assets/source-note-template.md](assets/source-note-template.md)
-2. Record the medium, author, and title
-3. For each key idea: capture the page/timestamp, exact quote if relevant, and elaboration in own words
-4. Save to the user's `Source Material/` folder
-5. After completing source notes, offer to extract main notes from the key ideas
+1. Read the template from `~/TheBible/5 - Templates/Zettelkasten Source Note Template.md`
+2. Create the source note following the template structure
+3. Record the medium, author, and title
+4. For each key idea: capture the page/timestamp, exact quote if relevant, and elaboration in own words
+5. Save to the user's `Source Material/` folder
+6. After completing source notes, offer to extract main notes from the key ideas
+
+### Creating a General Note
+
+When the user's request doesn't clearly map to a Zettelkasten main or source note:
+
+1. Consult the Template Selection table above to identify the best-fit template
+2. If ambiguous between two or more templates, ask the user to confirm
+3. Read the selected template from `~/TheBible/5 - Templates/`
+4. Create the note following the template structure
+5. Save to the appropriate folder based on the note type (e.g., `Rough Notes/` for fleeting ideas)
 
 ### Reviewing and Improving Existing Notes
 
