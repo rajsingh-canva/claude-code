@@ -133,6 +133,17 @@ Use this when reviewing any note:
 - [ ] Links back to source material note
 - [ ] Formatted with line breaks for readability
 
+## Vault Operations via Obsidian CLI
+
+For programmatic vault operations (searching notes, opening files, reading content, managing tags, checking backlinks), **load and use the `obsidian-cli` skill**. It wraps the Obsidian CLI tool and provides the complete command reference.
+
+Key integrations:
+- **Before creating a note**: Use `obsidian search` to check if a similar note already exists
+- **After creating a note**: Use `obsidian backlinks` and `obsidian links` to verify connectivity
+- **Organization reviews**: Use `obsidian orphans`, `obsidian deadends`, and `obsidian tags counts sort=count` to assess vault health
+- **Template operations**: Use `obsidian create template=...` to create notes directly from vault templates
+- **Property management**: Use `obsidian property:set` and `obsidian property:read` for frontmatter
+
 ## Obsidian-Specific Features
 
 - **Tags as notes**: Tags are empty notes in the `Tags/` folder, linked via `[[ ]]` — not hashtags
