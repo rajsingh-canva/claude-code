@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Spawn a single headless Claude agent in a target tmux pane with logging
+# Usage: cca-spawn --session <session> --pane <pane> --name <name> \
+#                  --prompt <prompt> [--project <dir>] [--tools <tools>] \
+#                  [--model <model>] [--budget <usd>] [--max-turns <n>]
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../lib/agent-registry.sh"
+
+# Parse arguments
+SESSION="" PANE="" NAME="" PROMPT="" PROJECT="" TOOLS="" MODEL="" BUDGET="" MAX_TURNS=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session)  SESSION="$2"; shift 2 ;;
+    --pane)     PANE="$2"; shift 2 ;;
+    --name)     NAME="$2"; shift 2 ;;
+    --prompt)   PROMPT="$2"; shift 2 ;;
+    --project)  PROJECT="$2"; shift 2 ;;
+    --tools)    TOOLS="$2"; shift 2 ;;
+    --model)    MODEL="$2"; shift 2 ;;
+    --budget)   BUDGET="$2"; shift 2 ;;
+    --max-turns) MAX_TURNS="$2"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; exit 1 ;;
+  esac
+done
+
+# Validate required args
+if [[ -z "$SESSION" || -z "$PANE" || -z "$NAME" || -z "$PROMPT" ]]; then
+  echo "Usage: cca-spawn --session <session> --pane <pane> --name <name> --prompt <prompt>" >&2
+  echo "  Optional: --project <dir> --tools <tools> --model <model> --budget <usd> --max-turns <n>" >&2
+  exit 1
+fi
+
+# Setup logging
+LOG_DIR="$SCRIPT_DIR/../logs/$SESSION"
+mkdir -p "$LOG_DIR"
+
+# Build the claude command
+CLAUDE_CMD="claude -p"
+
+# Use a temp file for the prompt to avoid shell quoting issues
+PROMPT_FILE=$(mktemp)
+echo "$PROMPT" > "$PROMPT_FILE"
+
+CLAUDE_CMD="$CLAUDE_CMD \"\$(cat '$PROMPT_FILE')\" --output-format stream-json"
+[[ -n "$PROJECT" ]]   && CLAUDE_CMD="$CLAUDE_CMD --add-dir '$PROJECT'"
+[[ -n "$TOOLS" ]]     && CLAUDE_CMD="$CLAUDE_CMD --allowedTools $TOOLS"
+[[ -n "$MODEL" ]]     && CLAUDE_CMD="$CLAUDE_CMD --model $MODEL"
+[[ -n "$BUDGET" ]]    && CLAUDE_CMD="$CLAUDE_CMD --max-budget-usd $BUDGET"
+[[ -n "$MAX_TURNS" ]] && CLAUDE_CMD="$CLAUDE_CMD --max-turns $MAX_TURNS"
+
+# The pipeline: run claude, tee raw JSON, extract text for display
+FULL_CMD="echo '=== Agent: $NAME ===' && $CLAUDE_CMD 2>&1 | tee '$LOG_DIR/agent-${NAME}.json' | jq -r --unbuffered 'if .type == \"assistant\" then .content[]? | (if .type == \"text\" then .text // empty elif .type == \"tool_use\" then \"[tool] \(.name)\" else empty end) elif .type == \"result\" then \"--- Done ---\" else empty end' | tee '$LOG_DIR/agent-${NAME}.log'; rm -f '$PROMPT_FILE'"
+
+# Send command to the target tmux pane
+tmux send-keys -t "$SESSION:$PANE" "$FULL_CMD" C-m
+
+# Register agent
+register_agent "$SESSION" "$NAME" "$PANE"
+
+echo "Spawned agent '$NAME' in $SESSION:$PANE (logs: $LOG_DIR/agent-${NAME}.*)"

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Launch a monitoring dashboard window in an existing session
+# Usage: cca-dash [session-name]
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../lib/tmux-helpers.sh"
+source "$SCRIPT_DIR/../lib/agent-registry.sh"
+
+ensure_tmux
+
+SESSION="${1:-$(get_active_session)}"
+if [[ -z "$SESSION" ]]; then
+  echo "No active session found. Specify a session name." >&2
+  exit 1
+fi
+
+LOG_DIR="$SCRIPT_DIR/../logs/$SESSION"
+mkdir -p "$LOG_DIR"
+
+# Create a new window named "dashboard" in the session
+tmux new-window -t "$SESSION" -n "dashboard" 2>/dev/null || true
+
+# Top-left pane: status table that refreshes every 2s
+tmux send-keys -t "$SESSION:dashboard" \
+  "watch -n2 'bash $SCRIPT_DIR/../lib/agent-registry.sh && agent_status_table $SESSION'" C-m
+
+# Top-right pane: aggregated activity stream
+tmux split-window -h -t "$SESSION:dashboard"
+tmux send-keys -t "$SESSION:dashboard.1" \
+  "echo '=== Aggregated Agent Activity ===' && tail -f $LOG_DIR/agent-*.log 2>/dev/null || echo 'Waiting for agent logs...'" C-m
+
+# Bottom pane: list of agents and individual logs
+AGENTS=($(list_agents "$SESSION" 2>/dev/null || true))
+if [[ ${#AGENTS[@]} -gt 0 ]]; then
+  for i in "${!AGENTS[@]}"; do
+    AGENT_NAME="${AGENTS[$i]}"
+    tmux split-window -v -t "$SESSION:dashboard"
+    tmux send-keys -t "$SESSION:dashboard.$((i+2))" \
+      "echo '=== $AGENT_NAME ===' && tail -f '$LOG_DIR/agent-${AGENT_NAME}.log' 2>/dev/null || echo 'Waiting for $AGENT_NAME logs...'" C-m
+  done
+fi
+
+# Rebalance the layout
+tmux select-layout -t "$SESSION:dashboard" tiled
+
+echo "Dashboard created in $SESSION:dashboard"

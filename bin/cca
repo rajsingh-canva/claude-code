@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# cca - Claude Code Agents: main entry point
+# Usage:
+#   cca launch <template> [args...]   Launch a workflow template
+#   cca dash [session]                Open monitoring dashboard
+#   cca kill [session | --all]        Tear down sessions
+#   cca list                          List active sessions
+#   cca spawn [args...]               Spawn a single agent (low-level)
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../lib/tmux-helpers.sh"
+
+ensure_tmux
+
+CMD="${1:-help}"
+shift || true
+
+case "$CMD" in
+  launch)
+    TEMPLATE="${1:-custom}"
+    shift || true
+    TEMPLATE_FILE="$SCRIPT_DIR/../templates/${TEMPLATE}.sh"
+    if [[ ! -f "$TEMPLATE_FILE" ]]; then
+      echo "Unknown template: $TEMPLATE" >&2
+      echo "Available: $(ls "$SCRIPT_DIR/../templates/" | sed 's/\.sh$//' | tr '\n' ' ')" >&2
+      exit 1
+    fi
+    source "$TEMPLATE_FILE"
+    launch_template "$@"
+    ;;
+  dash)
+    exec "$SCRIPT_DIR/cca-dash" "$@"
+    ;;
+  kill)
+    exec "$SCRIPT_DIR/cca-kill" "$@"
+    ;;
+  list)
+    list_sessions
+    ;;
+  spawn)
+    exec "$SCRIPT_DIR/cca-spawn" "$@"
+    ;;
+  help|*)
+    cat <<'EOF'
+cca - Claude Code Agents
+
+Usage:
+  cca launch <template> [args...]   Launch a workflow template
+  cca dash [session]                Open monitoring dashboard
+  cca kill [session | --all]        Tear down sessions
+  cca list                          List active sessions
+  cca spawn [args...]               Spawn a single agent (low-level)
+
+Templates:
+  code-review <task> [project-dir]  Two-pane code + security review
+  research <topic> [project-dir]    Three-pane research workflow
+  custom <prompt1> [prompt2] ...    Generic N-pane workflow
+
+Environment:
+  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1  Enable native agent teams
+EOF
+    ;;
+esac
