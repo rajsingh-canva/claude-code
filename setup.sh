@@ -46,7 +46,7 @@ if [[ -n "$SHELL_PROFILE" ]]; then
   if ! grep -q 'claude-code/bin' "$SHELL_PROFILE" 2>/dev/null; then
     echo "" >> "$SHELL_PROFILE"
     echo "# Claude Code toolkit" >> "$SHELL_PROFILE"
-    echo "export PATH=\"\$HOME/Work/claude-code/bin:\$PATH\"" >> "$SHELL_PROFILE"
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$SHELL_PROFILE"
     echo "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1" >> "$SHELL_PROFILE"
     echo "Added PATH and CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS to $SHELL_PROFILE"
   else
