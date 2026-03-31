@@ -74,6 +74,17 @@ For profiles with variants (e.g., regional or environment-specific), suffix the 
 - `warp_china.mobileconfig`
 - `chrome_token_production.mobileconfig`
 
+### DSM Repo (`/Users/rajsingh/work/dsm`) — Additional Conventions
+
+Always read `/Users/rajsingh/work/dsm/CLAUDE.md` for the authoritative naming rules. Summary:
+
+| Convention | Pattern | Example |
+|------------|---------|---------|
+| Branch | `username/JIRA-123-short-description` | `rajsingh/DSM-1234-santa-events-profile` |
+| Commit message | One line only | `Add Santa events config profile` |
+| Profile directory | Title Case, under `kandji/custom-profiles/` | `Santa Configuration - Events` |
+| Profile filename | snake_case `.mobileconfig` | `santa_configuration_events.mobileconfig` |
+
 ---
 
 ## Kandji Variable Substitution

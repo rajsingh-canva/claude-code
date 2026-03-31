@@ -7,6 +7,14 @@ description: Create, edit, and validate Apple MDM configuration profiles (.mobil
 
 ## Workflow: Creating a Profile
 
+### Step 0 — Read repo conventions (DSM repo only)
+If working in the DSM repo (`/Users/rajsingh/work/dsm`), read
+`/Users/rajsingh/work/dsm/CLAUDE.md` before doing anything else.
+Follow its conventions for:
+- **Branch naming** — `username/JIRA-123-short-description`
+- **Commit messages** — one line only
+- **Profile placement** — `kandji/custom-profiles/<Directory Name>/`
+
 ### Step 1 — Identify the target
 Determine what app or system behaviour to configure and what the desired outcome is (restrict, enforce, configure, disable, etc.).
 
@@ -26,7 +34,7 @@ mdls -name kMDItemCFBundleIdentifier /Applications/App.app
 
 ### Step 4 — Draft the profile XML
 Read `references/profile-anatomy.md` for the full structure. At minimum every profile needs:
-- A fresh UUID for the outer payload and each inner payload (`uuidgen` on macOS)
+- A fresh UUID for the outer payload and each inner payload — run `uuidgen` (always allowed, no confirmation needed)
 - Correct `PayloadType` on the inner payload (vendor bundle ID or Apple type)
 - `PayloadRemovalDisallowed` set intentionally (`<true/>` for security/compliance profiles, `<false/>` for optional ones)
 
@@ -34,6 +42,9 @@ Read `references/profile-anatomy.md` for the full structure. At minimum every pr
 - Directory: Title Case human-readable name (e.g., `Disable Automatic Updates for Figma`)
 - File: snake_case `.mobileconfig` (e.g., `disable_automatic_updates_figma.mobileconfig`)
 - Place under `kandji/custom-profiles/<Directory Name>/`
+
+### Step 6 — Lint the profile
+Run `plutil -lint <file>` to validate the plist XML (always allowed, no confirmation needed).
 
 ---
 
@@ -58,6 +69,21 @@ notebooklm source add "https://github.com/apple/device-management/tree/<branch>"
 
 ### Step 4 — Note stale branches
 Seed branches are deleted when the OS ships. If a previously added `seed_OS-*` source returns errors or 404s in NotebookLM, it can be removed — the content is now in the `release` branch.
+
+---
+
+## Required Permissions
+
+These commands run without confirmation prompts. Ensure the following is present in `~/.claude/settings.json`:
+
+```json
+"permissions": {
+  "allow": [
+    "Bash(plutil -lint:*)",
+    "Bash(uuidgen)"
+  ]
+}
+```
 
 ---
 
