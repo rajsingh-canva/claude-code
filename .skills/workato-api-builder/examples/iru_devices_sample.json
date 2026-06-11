@@ -1,0 +1,70 @@
+{
+  "status_code": 200,
+  "error": "",
+  "headers": {
+    "connection": "keep-alive",
+    "content_type": "application/json; charset=utf-8",
+    "access_control_allow_origin": "*",
+    "allow": "GET",
+    "content_security_policy": "frame-ancestors 'none'; form-action 'none'; default-src 'none'; base-uri 'none'",
+    "cross_origin_opener_policy": "same-origin",
+    "feature_policy": "accelerometer 'none'; camera 'none'; geolocation 'none'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; payment 'none'; usb 'none'",
+    "link": "<None>; rel=\"next\", <None>; rel=\"prev\"",
+    "ratelimit_limit": "50",
+    "ratelimit_remaining": "49",
+    "ratelimit_reset": "1",
+    "x_ratelimit_limit_hour": "20000",
+    "x_ratelimit_limit_second": "50",
+    "x_ratelimit_remaining_hour": "19756",
+    "x_ratelimit_remaining_second": "49",
+    "x_total_count": "1",
+    "x_total_pages": "1",
+    "accept_ranges": "bytes",
+    "date": "2026-06-11T06:51:50.000000+00:00",
+    "vary": "Origin, Accept-Encoding",
+    "x_content_type_options": "nosniff",
+    "x_frame_options": "DENY",
+    "referrer_policy": "strict-origin-when-cross-origin",
+    "strict_transport_security": "max-age=31536000; includeSubDomains; preload",
+    "transfer_encoding": "chunked"
+  },
+  "body": "[{\"device_id\":\"fd94ee18-8fb0-455f-a232-7e89721617d3\"}]",
+  "response": {
+    "array": [
+      {
+        "device_id": "fd94ee18-8fb0-455f-a232-7e89721617d3",
+        "device_name": "Raj's Mainbook Pro",
+        "model": "MacBook Pro (16-inch, Nov 2023)",
+        "serial_number": "G02QD2271X",
+        "udid": "2cf39be2-cfd7-54bd-994d-234d0153efbf",
+        "platform": "Mac",
+        "os_version": "26.6",
+        "supplemental_build_version": "25G5028f",
+        "supplemental_os_version_extra": "",
+        "last_check_in": "2026-06-11T06:44:18.891705+00:00",
+        "user": {
+          "email": "rajsingh@canva.com",
+          "name": "Raj Singh",
+          "id": "ce6fa13f-4edf-4433-85f0-4180ee64f3df",
+          "is_archived": false,
+          "active": true
+        },
+        "asset_tag": "IT2441580",
+        "blueprint_id": "0b64eaa5-b28d-47e3-abba-4529d05111d2",
+        "mdm_enabled": true,
+        "agent_installed": true,
+        "is_missing": false,
+        "is_removed": false,
+        "agent_version": "5.1.13 (5385)",
+        "first_enrollment": "2024-07-28T21:45:19.005677+00:00",
+        "last_enrollment": "2024-07-28T21:45:19.005677+00:00",
+        "blueprint_name": "macOS Primary Devices",
+        "lost_mode_status": "",
+        "tags": [
+          "Beta Installation Permitted",
+          "DSM - Testing - Raj"
+        ]
+      }
+    ]
+  }
+}
