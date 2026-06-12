@@ -26,10 +26,14 @@ A single sample can't reveal the type of a `null`, `""`, or `[]` field. The buil
 
 Workato's schema-designer humanises field names a specific way; `build_function.py` embeds schemas into recipes that Workato re-reads, so labels must match or diffs/round-trips drift:
 
-- split on `_`; capitalise the **first** word only, lowercase the rest
+- split on `_` **and** camelCase/PascalCase boundaries (`lowercase`→`UPPERCASE`)
+- capitalise the **first** word only, lowercase the rest
 - any token equal to `id` → `ID`
 
-Examples: `device_id`→"Device ID", `os_version`→"Os version", `udid`→"Udid", `x_total_count`→"X total count", `mdm_enabled`→"Mdm enabled", `last_check_in`→"Last check in".
+snake_case (Iru): `device_id`→"Device ID", `os_version`→"Os version", `udid`→"Udid", `x_total_count`→"X total count", `mdm_enabled`→"Mdm enabled".
+camelCase (Apple Business Manager): `serialNumber`→"Serial number", `deviceCount`→"Device count", `lastConnectedDateTime`→"Last connected date time", `enableMdmDisownFlag`→"Enable mdm disown flag".
+
+Note: only the first word is capitalised, so acronyms lowercase after the first word (`lastConnectedIp`→"Last connected ip", not "IP"). That matches Workato's own humanizer (the rule is verified against the Iru recipe oracle and extended identically to camelCase). Covered by `scripts/test_humanize.py`.
 
 ## Booleans: standalone vs embedded
 

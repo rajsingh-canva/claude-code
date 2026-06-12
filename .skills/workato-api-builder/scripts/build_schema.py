@@ -15,7 +15,8 @@ DT = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\
 
 
 def humanize(name):
-    parts = name.split("_")
+    # split on underscores AND camelCase/PascalCase boundaries
+    parts = [p for p in re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).split("_") if p]
     out = []
     for i, p in enumerate(parts):
         if p.lower() == "id":
