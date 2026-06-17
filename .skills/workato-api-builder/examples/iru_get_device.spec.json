@@ -1,0 +1,20 @@
+{
+  "name": "WKT-147 | FUNC | Get Device",
+  "connector": "Iru",
+  "description": "",
+  "connection": {
+    "zip_name": "WKT-147 | Device Movements and Management/Global Connections/Kandji/euc_conn_kandji_production_canva_kandji_io.connection.json",
+    "name": "EUC CONN | Kandji Production (canva.kandji.io)",
+    "folder": "WKT-147 | Device Movements and Management/Global Connections/Kandji"
+  },
+  "inputs": [
+    { "name": "iru_device_id", "label": "Iru Device ID", "type": "string", "optional": true },
+    { "name": "iru_serial_number", "label": "Iru Serial Number", "type": "string", "optional": true }
+  ],
+  "branches": [
+    { "when": "iru_device_id", "method": "GET", "url": "devices/{iru_device_id}", "request_name": "Get Iru Device using Device ID", "schema": "Iru/iruDevices" },
+    { "when": "iru_serial_number", "method": "GET", "url": "devices?serial_number={iru_serial_number}", "request_name": "Get Iru Device using Serial Number", "schema": "Iru/iruDevices" }
+  ],
+  "else_error": { "variable": "blank_device_error", "message": "Device Details are missing" },
+  "result": [ { "name": "blank_device_error", "type": "string", "optional": false } ]
+}
