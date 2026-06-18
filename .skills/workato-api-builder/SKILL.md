@@ -1,12 +1,13 @@
 ---
 name: workato-api-builder
-description: Use when building a Workato output schema (object_definition) from an API JSON response, turning an API response into datapills, or scaffolding a reusable Workato "FUNC" recipe function that calls a REST connection (e.g. GET-lookup functions for Iru/Kandji or Apple Business Manager). Triggers include a pasted API response, a *.recipe.json or object_definition, "schema for this endpoint", or "make a Workato function".
+description: Use when building a Workato output schema (object_definition) from an API JSON response, turning an API response into datapills, scaffolding a reusable Workato "FUNC" recipe function that calls a REST connection (e.g. GET-lookup functions for Iru/Kandji or Apple Business Manager), or saving/curating a multi-item API response (assets/devices/objects) down to the fields to keep. Triggers include a pasted or saved API response, a *.recipe.json or object_definition, "schema for this endpoint", or "make a Workato function".
 ---
 
 # Workato API Builder
 
-Two-layer generator for Workato artifacts. Each layer runs on its own; Layer 2 consumes Layer 1's output.
+Generator for Workato artifacts. Each layer runs on its own; later layers consume earlier output.
 
+- **Layer 0 — `make_samples.py`**: a saved API response → a single-item sample beside the full list. For multi-item responses you curate fields on one item, then apply the same trims to the full file.
 - **Layer 1 — `build_schema.py`**: API JSON response sample → schema file. Targets: Workato `object_definition` (the field-array format Workato's schema-designer uses) and JSON Schema draft 2020-12.
 - **Layer 2 — `build_function.py`**: a small `*.spec.json` + a schema → an import-ready `*.recipe.json` Workato **recipe function** (the "FUNC" pattern: `workato_recipe_function` trigger → branch on inputs → REST `make_request_v2` → `return_result`).
 
@@ -14,9 +15,21 @@ Two-layer generator for Workato artifacts. Each layer runs on its own; Layer 2 c
 
 | You have… | You want… | Run |
 |---|---|---|
-| A pasted API response | Datapills / output schema | Layer 1 |
+| A saved multi-item response | One item to curate fields on | Layer 0 |
+| A pasted/curated API response | Datapills / output schema | Layer 1 |
 | A schema + endpoint details | A reusable recipe function | Layer 2 |
 | Just an API response | The whole function | Layer 1 → Layer 2 |
+
+## Layer 0 — save the full response + a single-item sample
+
+When an API call returns many items (assets/devices/objects), save the full response under `specs/<connector>/`, then create a single-item companion to curate which fields to keep:
+
+```bash
+python3 scripts/make_samples.py --input specs/Atlassian/atlassian_jira_assets_get_assets.json
+# -> writes ...get_assets_one_item.json  (first item, bare object)
+```
+
+It auto-detects the item list (`body.values`, `response.array`, `data`, top-level array, …); override with `--item-path a.b.c`. Curate fields on the one-item file, then apply the **same** deletions to the full file (e.g. one recursive `pop` per removed key) so the two stay in sync before Layer 1.
 
 ## Layer 1 — generate a schema
 
