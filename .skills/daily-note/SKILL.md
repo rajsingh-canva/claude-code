@@ -174,6 +174,35 @@ Then confirm to the user:
 
 ---
 
+## Transitioning Existing Tickets
+
+When the end-of-session review finds items that reference existing ticket IDs (e.g. "Close DSM-201"), do not create a new task — instead offer to transition the existing ticket.
+
+Steps:
+1. Call `mcp__claude_ai_Atlassian__getTransitionsForJiraIssue` to get available transitions
+2. Identify the "Done" category transition (statusCategory `key: "done"`) — typically "Delivered" or "Cancelled"
+3. Call `mcp__claude_ai_Atlassian__transitionJiraIssue` with the correct payload
+
+**Critical — correct parameter names:**
+
+```
+# Get transitions — parameter is issueIdOrKey, NOT issueKey
+mcp__claude_ai_Atlassian__getTransitionsForJiraIssue:
+  cloudId: <CLOUD_ID>
+  issueIdOrKey: "DSM-201"   # ← must be issueIdOrKey
+
+# Transition — transition must be an object with an id key, NOT a bare transitionId string
+mcp__claude_ai_Atlassian__transitionJiraIssue:
+  cloudId: <CLOUD_ID>
+  issueIdOrKey: "DSM-201"
+  transition:
+    id: "91"               # ← must be transition: {id: "..."}, not transitionId: "91"
+```
+
+These parameter names are non-obvious and both will fail silently with a validation error if passed incorrectly.
+
+---
+
 ## Error Handling
 
 | Situation | Action |
@@ -184,6 +213,8 @@ Then confirm to the user:
 | Note already exists for today | Open the existing note without overwriting |
 | No items to review | Skip batch review, tell user: "No new items found to review for Jira." |
 | Project key unknown | Ask the user before proceeding |
+| `getTransitionsForJiraIssue` validation error | Check parameter is `issueIdOrKey`, not `issueKey` |
+| `transitionJiraIssue` validation error | Check `transition` is an object `{"id": "..."}`, not a bare `transitionId` string |
 
 ---
 
