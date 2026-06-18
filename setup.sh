@@ -65,6 +65,31 @@ if command -v uv &>/dev/null && [[ -d "$SCRIPT_DIR/orchestrator" ]]; then
   echo "  Done."
 fi
 
+# Set up notebooklm-py
+NOTEBOOKLM_DIR="$HOME/work/notebooklm-py"
+if [[ ! -d "$NOTEBOOKLM_DIR" ]]; then
+  echo "Setting up notebooklm-py..."
+  if ! command -v git &>/dev/null; then
+    echo "  Missing: git — skipping notebooklm-py setup"
+  else
+    NOTEBOOKLM_TAG=$(curl -s https://api.github.com/repos/teng-lin/notebooklm-py/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+    echo "  Using release $NOTEBOOKLM_TAG"
+    git clone --branch "$NOTEBOOKLM_TAG" --depth 1 https://github.com/teng-lin/notebooklm-py.git "$NOTEBOOKLM_DIR"
+    cd "$NOTEBOOKLM_DIR"
+    uv venv
+    source .venv/bin/activate
+    uv pip install -e ".[browser]"
+    playwright install chromium
+    deactivate
+    cd "$SCRIPT_DIR"
+    echo "  Done."
+    echo "  Authenticate once after setup:"
+    echo "    source ~/work/notebooklm-py/.venv/bin/activate && notebooklm auth"
+  fi
+else
+  echo "  Found: notebooklm-py ($NOTEBOOKLM_DIR)"
+fi
+
 # Create logs and state directories
 mkdir -p "$SCRIPT_DIR/logs" "$SCRIPT_DIR/state"
 

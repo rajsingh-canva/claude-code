@@ -93,6 +93,7 @@ uv run main.py "task description" /path/to/project [--workers N] [--model MODEL]
 
 | Skill | Description |
 |-------|-------------|
+| **notebooklm** | Query, create, and manage Google NotebookLM notebooks and sources via CLI |
 | **research-notes** | Research and summarize URLs, YouTube videos, and PDFs into structured notes using NotebookLM |
 | **obsidian-cli** | Programmatic access to Obsidian vault via CLI — search, create, edit, tag management |
 | **obsidian-zettelkasten** | Zettelkasten note-taking in Obsidian — one idea per note, link-based organization |
@@ -121,7 +122,13 @@ source ~/.zshrc
 - Adding `bin/` to your PATH
 - Setting `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
 - Installing Python dependencies for the orchestrator
+- Cloning and installing `notebooklm-py` (with Playwright/Chromium)
 - Creating runtime directories
+
+**One-time after setup** — authenticate NotebookLM:
+```bash
+source ~/work/notebooklm-py/.venv/bin/activate && notebooklm auth
+```
 
 ### Verify
 
