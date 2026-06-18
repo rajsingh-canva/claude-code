@@ -44,9 +44,13 @@ claude-code/
 ├── prompts/                # System prompts for agent roles
 │   └── orchestrator.md     # Teaches the lead agent how to delegate
 ├── .skills/                # Custom Claude Code skills
+│   ├── notebooklm/         # Google NotebookLM via CLI
 │   ├── research-notes/     # Research via NotebookLM
 │   ├── obsidian-cli/       # Obsidian vault CLI operations
 │   ├── obsidian-zettelkasten/ # Zettelkasten note-taking method
+│   ├── daily-note/         # Obsidian daily notes + Jira/Slack
+│   ├── mdm-profile-builder/ # Apple MDM configuration profiles
+│   ├── workato-api-builder/ # Workato schemas + FUNC recipe functions
 │   └── windows-vm-builder/ # Windows 11 golden images with Packer
 ├── setup.sh                # One-command setup for new machines
 └── .gitignore
@@ -97,6 +101,9 @@ uv run main.py "task description" /path/to/project [--workers N] [--model MODEL]
 | **research-notes** | Research and summarize URLs, YouTube videos, and PDFs into structured notes using NotebookLM |
 | **obsidian-cli** | Programmatic access to Obsidian vault via CLI — search, create, edit, tag management |
 | **obsidian-zettelkasten** | Zettelkasten note-taking in Obsidian — one idea per note, link-based organization |
+| **daily-note** | Generate and manage Obsidian daily notes with Jira (incl. ticket transitions) and Slack integration |
+| **mdm-profile-builder** | Build Apple MDM configuration profiles (`.mobileconfig`) — payload types, profile anatomy reference |
+| **workato-api-builder** | Turn an API JSON response into a Workato `object_definition` schema and scaffold reusable FUNC recipe functions; extract single-item samples from multi-item responses |
 | **windows-vm-builder** | Build Windows 11 golden images on macOS using Packer + Parallels Desktop |
 
 ## Setup on a New Machine
