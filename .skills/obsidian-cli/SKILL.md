@@ -9,11 +9,13 @@ Programmatic access to Obsidian vaults via the built-in CLI. Requires Obsidian d
 
 ## Setup
 
-The CLI is bundled with Obsidian and available at `/Applications/Obsidian.app/Contents/MacOS/obsidian`. It is registered in PATH via `~/.zprofile`:
+The CLI is a dedicated binary bundled inside the app at `/Applications/Obsidian.app/Contents/MacOS/obsidian-cli` — a separate binary from the main GUI app launcher (`Obsidian`/`obsidian`, same directory).
 
-```bash
-export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
-```
+Register it via **Obsidian → Settings → General → "Command line interface"** (toggle on). This creates a symlink at `/usr/local/bin/obsidian` pointing to the `obsidian-cli` binary, and will prompt for your admin password via a system dialog to create it.
+
+Do **not** add `/Applications/Obsidian.app/Contents/MacOS` to `PATH` directly — macOS's default case-insensitive filesystem means a plain `obsidian` on PATH resolves to the main GUI launcher (`Obsidian`) instead of `obsidian-cli`, which silently breaks CLI usage: write commands end up puppeting the live GUI app over macOS Apple Events (triggering repeated "X would like to control Obsidian" Automation permission prompts) instead of using the dedicated CLI's own IPC.
+
+Verify with `readlink /usr/local/bin/obsidian` — it should point to `.../Contents/MacOS/obsidian-cli`, not resolve to the GUI app. If the toggle doesn't create the symlink (e.g. it was already on from a previous Obsidian version), toggle it off and back on to re-trigger registration.
 
 **Important:** The CLI communicates with the running Obsidian app. Obsidian must be open for commands to work.
 
