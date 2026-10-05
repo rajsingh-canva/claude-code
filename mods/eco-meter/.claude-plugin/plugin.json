@@ -1,0 +1,38 @@
+{
+  "name": "eco-meter",
+  "version": "0.1.0",
+  "description": "Water and trees for this session and the month, pinned under the prompt",
+  "author": { "name": "Raj Singh" },
+  "userConfig": {
+    "budgetUsd": {
+      "type": "number",
+      "title": "Monthly budget (USD)",
+      "description": "Used when /usage does not report a monthly limit",
+      "default": 4000
+    },
+    "whPerUsd": {
+      "type": "number",
+      "title": "Energy per dollar (Wh/$)",
+      "description": "Inference energy per US dollar of list-price spend",
+      "default": 60
+    },
+    "waterLPerKwh": {
+      "type": "number",
+      "title": "Water per kWh (L/kWh)",
+      "description": "On-site cooling plus electricity generation water",
+      "default": 4.2
+    },
+    "gCo2PerKwh": {
+      "type": "number",
+      "title": "CO2 per kWh (g/kWh)",
+      "description": "Grid carbon intensity including data-centre overhead",
+      "default": 430
+    },
+    "kgCo2PerTreeYear": {
+      "type": "number",
+      "title": "CO2 per tree per year (kg)",
+      "description": "What one mature tree takes up in a year",
+      "default": 22
+    }
+  }
+}

@@ -21,3 +21,7 @@ logs/
 state/
 !logs/.gitkeep
 !state/.gitkeep
+
+# Claude Code mods: types and tsconfig the engine writes on each load
+mods/*/.claude-plugin/types/
+mods/*/tsconfig.json

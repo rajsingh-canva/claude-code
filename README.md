@@ -52,6 +52,9 @@ claude-code/
 │   ├── mdm-profile-builder/ # Apple MDM configuration profiles
 │   ├── workato-api-builder/ # Workato schemas + FUNC recipe functions
 │   └── windows-vm-builder/ # Windows 11 golden images with Packer
+├── mods/                   # Claude Code mods (local marketplace "raj-mods")
+│   ├── agent-progress/     # Subagent progress bars above the prompt
+│   └── eco-meter/          # Water and trees for session and month spend
 ├── setup.sh                # One-command setup for new machines
 └── .gitignore
 ```
@@ -105,6 +108,15 @@ uv run main.py "task description" /path/to/project [--workers N] [--model MODEL]
 | **mdm-profile-builder** | Build Apple MDM configuration profiles (`.mobileconfig`) — payload types, profile anatomy reference |
 | **workato-api-builder** | Turn an API JSON response into a Workato `object_definition` schema and scaffold reusable FUNC recipe functions; extract single-item samples from multi-item responses |
 | **windows-vm-builder** | Build Windows 11 golden images on macOS using Packer + Parallels Desktop |
+
+## Mods
+
+Claude Code mods live in [`mods/`](mods/), which is also a local plugin marketplace. See [mods/README.md](mods/README.md) to develop and install them.
+
+| Mod | Description |
+|-----|-------------|
+| **agent-progress** | Estimated progress bars for running subagents in the band above the prompt |
+| **eco-meter** | Water and trees for this session's and the month's spend, pinned under the prompt |
 
 ## Setup on a New Machine
 
