@@ -54,7 +54,8 @@ claude-code/
 │   └── windows-vm-builder/ # Windows 11 golden images with Packer
 ├── mods/                   # Claude Code mods (local marketplace "raj-mods")
 │   ├── agent-progress/     # Subagent progress bars above the prompt
-│   └── eco-meter/          # Water and trees for session and month spend
+│   ├── eco-meter/          # Water and trees for session and month spend
+│   └── cache-warm/         # Prompt cache warm/cold countdown
 ├── setup.sh                # One-command setup for new machines
 └── .gitignore
 ```
@@ -117,6 +118,7 @@ Claude Code mods live in [`mods/`](mods/), which is also a local plugin marketpl
 |-----|-------------|
 | **agent-progress** | Estimated progress bars for running subagents in the band above the prompt |
 | **eco-meter** | Water and trees for this session's and the month's spend, pinned under the prompt |
+| **cache-warm** | Whether the main conversation's prompt cache is still warm, with a countdown, pinned under the prompt |
 
 ## Setup on a New Machine
 

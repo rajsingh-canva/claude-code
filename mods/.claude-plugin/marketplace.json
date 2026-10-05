@@ -12,6 +12,11 @@
       "name": "eco-meter",
       "source": "./eco-meter",
       "description": "Water and trees for this session and the month, pinned under the prompt"
+    },
+    {
+      "name": "cache-warm",
+      "source": "./cache-warm",
+      "description": "Shows whether the main conversation's prompt cache is still warm, pinned under the prompt"
     }
   ]
 }
