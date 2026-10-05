@@ -1,0 +1,15 @@
+{
+  "name": "cache-warm",
+  "version": "0.1.0",
+  "description": "Shows whether the main conversation's prompt cache is still warm, pinned under the prompt",
+  "author": { "name": "Raj Singh" },
+  "userConfig": {
+    "ttl": {
+      "type": "string",
+      "title": "Cache TTL",
+      "description": "auto reads it from the session transcript; 5m or 1h fixes it",
+      "options": ["auto", "5m", "1h"],
+      "default": "auto"
+    }
+  }
+}
