@@ -1,0 +1,6 @@
+{
+  "name": "agent-progress",
+  "version": "0.1.0",
+  "description": "Estimated progress bars for running subagents in the band above the prompt",
+  "author": { "name": "Raj Singh" }
+}

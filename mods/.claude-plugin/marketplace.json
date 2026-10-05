@@ -1,0 +1,17 @@
+{
+  "name": "raj-mods",
+  "owner": { "name": "Raj Singh" },
+  "description": "Personal Claude Code mods",
+  "plugins": [
+    {
+      "name": "agent-progress",
+      "source": "./agent-progress",
+      "description": "Estimated progress bars for running subagents in the band above the prompt"
+    },
+    {
+      "name": "eco-meter",
+      "source": "./eco-meter",
+      "description": "Water and trees for this session and the month, pinned under the prompt"
+    }
+  ]
+}
