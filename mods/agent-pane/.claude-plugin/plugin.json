@@ -1,0 +1,7 @@
+{
+  "name": "agent-pane",
+  "version": "0.1.0",
+  "description": "A pane beside the transcript listing your agents with their progress; open one to read it or message it",
+  "author": { "name": "Raj Singh" },
+  "types": "./types/index.d.ts"
+}

@@ -55,7 +55,8 @@ claude-code/
 ├── mods/                   # Claude Code mods (local marketplace "raj-mods")
 │   ├── agent-progress/     # Subagent progress bars above the prompt
 │   ├── eco-meter/          # Water and trees for session and month spend
-│   └── cache-warm/         # Prompt cache warm/cold countdown
+│   ├── cache-warm/         # Prompt cache warm/cold countdown
+│   └── agent-pane/         # Agents pane: progress, transcripts, messages
 ├── setup.sh                # One-command setup for new machines
 └── .gitignore
 ```
@@ -119,6 +120,7 @@ Claude Code mods live in [`mods/`](mods/), which is also a local plugin marketpl
 | **agent-progress** | Estimated progress bars for running subagents in the band above the prompt |
 | **eco-meter** | Water and trees for this session's and the month's spend, pinned under the prompt |
 | **cache-warm** | Whether the main conversation's prompt cache is still warm, with a countdown, pinned under the prompt |
+| **agent-pane** | A pane beside the transcript listing your agents with their progress; open one to read its transcript or message it |
 
 ## Setup on a New Machine
 
