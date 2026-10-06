@@ -1,6 +1,8 @@
 {
   "name": "raj-mods",
-  "owner": { "name": "Raj Singh" },
+  "owner": {
+    "name": "Raj Singh"
+  },
   "description": "Personal Claude Code mods",
   "plugins": [
     {
@@ -17,6 +19,11 @@
       "name": "cache-warm",
       "source": "./cache-warm",
       "description": "Shows whether the main conversation's prompt cache is still warm, pinned under the prompt"
+    },
+    {
+      "name": "agent-pane",
+      "source": "./agent-pane",
+      "description": "A pane beside the transcript listing your agents with their progress; open one to read it or message it"
     }
   ]
 }
