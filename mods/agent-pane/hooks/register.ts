@@ -2,7 +2,21 @@ import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, TurnCompleteReason } from 'claude-code'
 
 import type { PaneAgent } from '../types'
-import { type Line, type Status, glyph, isActive, merge, pushHistory, rows, summary, transcript, who, withStatus } from './agents.ts'
+import {
+  type Line,
+  type Status,
+  glyph,
+  isActive,
+  merge,
+  pushHistory,
+  rows,
+  statusColor,
+  summary,
+  transcript,
+  typeColor,
+  who,
+  withStatus,
+} from './agents.ts'
 
 const PANE = 'agents'
 const TITLE = 'Agents'
@@ -201,7 +215,23 @@ export const register: Register = on => {
         children: [
           Text({ bold: true, wrap: 'truncate-end', children: [head] }),
           ...lines.map(row =>
-            Button({ key: `agent:${row.id}`, label: row.label, plain: true, dimColor: row.isDim, onPress: () => open($, row.id) }),
+            Button({
+              key: `agent:${row.id}`,
+              label: row.label,
+              plain: true,
+              onPress: () => open($, row.id),
+              // A finished agent keeps its status colour and dims the rest
+              children: row.parts.map((part, i) =>
+                Text({
+                  key: `p${i}`,
+                  ...(part.color === undefined ? {} : { color: part.color }),
+                  bold: part.isBold === true && !row.isDim,
+                  dimColor: part.isDim === true || (row.isDim && i !== 1),
+                  wrap: 'truncate-end',
+                  children: [part.text],
+                }),
+              ),
+            }),
           ),
           Text({
             dimColor: true,
@@ -240,7 +270,15 @@ export const register: Register = on => {
           gap: 1,
           children: [
             Button({ key: 'back', label: '← Agents', plain: true, dimColor: true, onPress: () => open($, '') }),
-            Text({ bold: true, wrap: 'truncate-end', children: [`${glyph(agent.status)} ${who(agent)} · ${agent.description}`] }),
+            Text({
+              wrap: 'truncate-end',
+              children: [
+                Text({ color: statusColor(agent.status), children: [glyph(agent.status)] }),
+                ' ',
+                Text({ color: typeColor(agent.type), bold: true, children: [who(agent)] }),
+                ` · ${agent.description}`,
+              ],
+            }),
           ],
         }),
         Text({ dimColor: true, wrap: 'truncate-end', children: [summary(agent, history.get(agent.type), now)] }),

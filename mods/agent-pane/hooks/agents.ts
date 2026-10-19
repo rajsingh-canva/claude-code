@@ -7,7 +7,9 @@ import type { PaneAgent } from '../types'
 
 export type Status = PaneAgent['status']
 export type Line = { text: string; isDim?: boolean; isUser?: boolean }
-export type Row = { id: string; label: string; isDim: boolean }
+// One run of a row in one colour; a row's parts joined are its label
+export type Part = { text: string; color?: string; isBold?: boolean; isDim?: boolean }
+export type Row = { id: string; label: string; parts: Part[]; isDim: boolean }
 
 // Expected model requests for an agent type with too little history
 export const DEFAULT_STEPS = 15
@@ -44,6 +46,32 @@ const WORD: Record<Status, string> = {
   killed: 'stopped',
 }
 
+// Theme keys, so a status follows the person's theme
+const STATUS_COLOR: Record<Status, string> = {
+  pending: 'inactive',
+  running: 'claude',
+  waiting: 'warning',
+  idle: 'subtle',
+  completed: 'success',
+  failed: 'error',
+  killed: 'inactive',
+}
+
+// Agent colours that read on light and dark backgrounds; a type hashes to one
+export const PALETTE = ['#e07a5f', '#3d9be9', '#81b29a', '#f2a541', '#b07cc6', '#4ecdc4', '#e5698e', '#9aa84f']
+
+// The names an agent definition's `color:` frontmatter takes
+const NAMED_COLOR: Record<string, string> = {
+  red: '#e06c75',
+  orange: '#e5a050',
+  yellow: '#e5c07b',
+  green: '#81b29a',
+  cyan: '#4ecdc4',
+  blue: '#3d9be9',
+  purple: '#b07cc6',
+  pink: '#e5698e',
+}
+
 // Input fields that best name what a tool call was about, in order of preference
 const ARG_KEYS = ['file_path', 'command', 'pattern', 'path', 'url', 'query', 'description', 'prompt']
 
@@ -57,6 +85,44 @@ export function glyph(status: Status): string {
 
 export function statusWord(status: Status): string {
   return WORD[status]
+}
+
+export function statusColor(status: Status): string {
+  return STATUS_COLOR[status]
+}
+
+function hash(text: string): number {
+  let h = 5381
+  for (const ch of text) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0
+  return h
+}
+
+// An agent type's colour: its definition's `color:` when it names one, else
+// the same palette entry every time for that type
+export function typeColor(type: string, named?: string): string {
+  const key = named?.trim().toLowerCase()
+  if (key) return NAMED_COLOR[key] ?? key
+  return PALETTE[hash(shortType(type)) % PALETTE.length]!
+}
+
+// Keeps the first `cells` cells of a row's parts, ending in … when it cuts
+export function cutParts(parts: readonly Part[], cells: number): Part[] {
+  const total = parts.reduce((n, part) => n + width(part.text), 0)
+  if (total <= cells) return [...parts]
+  const out: Part[] = []
+  let room = cells
+  for (const part of parts) {
+    if (room <= 0) break
+    const w = width(part.text)
+    if (w < room) {
+      out.push(part)
+      room -= w
+      continue
+    }
+    out.push({ ...part, text: truncate(part.text, room) })
+    break
+  }
+  return out
 }
 
 export function median(nums: readonly number[]): number | undefined {
@@ -175,13 +241,14 @@ export function ordered(agents: readonly PaneAgent[]): PaneAgent[] {
   return [...agents].sort((a, b) => Number(isActive(b)) - Number(isActive(a)) || b.startedAt - a.startedAt)
 }
 
-function progressText(agent: PaneAgent, pct: number, barCells: number): string {
-  if (agent.status !== 'running') return statusWord(agent.status)
-  return barCells > 0 ? `${bar(pct, barCells)} ~${pct}%` : `~${pct}%`
+function progressParts(agent: PaneAgent, pct: number, barCells: number, color: string): Part[] {
+  if (agent.status !== 'running') return [{ text: statusWord(agent.status), color: statusColor(agent.status) }]
+  const label = { text: `~${pct}%`, color: 'subtle' }
+  return barCells > 0 ? [{ text: bar(pct, barCells), color }, { text: ' ' }, label] : [label]
 }
 
 // One clickable line per agent: mark, glyph, who, task, progress and clock,
-// the task cut to whatever room the rest leaves
+// the task cut to whatever room the rest leaves; status and type each have a colour
 export function rows(
   agents: readonly PaneAgent[],
   histories: ReadonlyMap<string, readonly number[]>,
@@ -196,16 +263,26 @@ export function rows(
   const tails = list.map(agent => {
     const pct = estimatePercent(agent, histories.get(agent.type))
     const clock = formatElapsed((agent.finishedAt ?? now) - agent.startedAt)
-    return `${progressText(agent, pct, barCells)} ${clock.padStart(5)}`
+    return [...progressParts(agent, pct, barCells, typeColor(agent.type)), { text: ' ' + clock.padStart(5), color: 'inactive' }]
   })
-  const tailWidth = Math.max(...tails.map(width))
+  const tailWidth = Math.max(...tails.map(tail => width(tail.map(p => p.text).join(''))))
   return list.map((agent, i) => {
-    const mark = agent.id === viewedId ? '▸' : ' '
-    const head = `${mark}${glyph(agent.status)} ${pad(who(agent), whoWidth)} `
-    const descWidth = columns - width(head) - tailWidth - 1
-    const desc = descWidth >= 4 ? pad(agent.description, descWidth) + ' ' : ''
-    const label = head + desc + tails[i]!.padStart(tailWidth)
-    return { id: agent.id, label: truncate(label, columns), isDim: !isActive(agent) }
+    const color = typeColor(agent.type)
+    const isViewed = agent.id === viewedId
+    const head: Part[] = [
+      { text: isViewed ? '▸' : ' ', color: 'claude' },
+      { text: glyph(agent.status), color: statusColor(agent.status) },
+      { text: ' ' },
+      { text: pad(who(agent), whoWidth), color, isBold: true },
+      { text: ' ' },
+    ]
+    const headWidth = width(head.map(p => p.text).join(''))
+    const descWidth = columns - headWidth - tailWidth - 1
+    const desc: Part[] = descWidth >= 4 ? [{ text: pad(agent.description, descWidth) + ' ', isDim: true }] : []
+    const tail = tails[i]!
+    const gap = tailWidth - width(tail.map(p => p.text).join(''))
+    const parts = cutParts([...head, ...desc, ...(gap > 0 ? [{ text: ' '.repeat(gap) }] : []), ...tail], columns)
+    return { id: agent.id, label: parts.map(p => p.text).join(''), parts, isDim: !isActive(agent) }
   })
 }
 
