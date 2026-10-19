@@ -1,0 +1,24 @@
+#!/opt/homebrew/bin/python3.12
+"""Stand-in for `gh` during evals: records every call, never touches GitHub."""
+
+import json
+import os
+import sys
+
+args = sys.argv[1:]
+body = None
+for flag in ("--body", "-b"):
+    if flag in args and args.index(flag) + 1 < len(args):
+        body = args[args.index(flag) + 1]
+for flag in ("--body-file", "-F"):
+    if flag in args and args.index(flag) + 1 < len(args):
+        src = args[args.index(flag) + 1]
+        body = sys.stdin.read() if src == "-" else open(src).read()
+
+with open(os.environ["GH_STUB_LOG"], "a") as f:
+    f.write(json.dumps({"args": args, "body": body, "cwd": os.getcwd()}) + "\n")
+
+if args[:2] == ["pr", "create"]:
+    print("https://github.com/example/claude-code/pull/1")
+elif args[:2] == ["pr", "merge"]:
+    print("Merged pull request #1")
