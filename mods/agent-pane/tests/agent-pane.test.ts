@@ -2,7 +2,7 @@ import type { AgentInfo, On, SessionMessage } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import type { PaneAgent } from '../types'
-import { cutParts, estimatePercent, formatTokens, merge, rows, shortModel, toolArg, transcript, typeColor, who, wrap } from '../hooks/agents.ts'
+import { cutParts, estimatePercent, formatTokens, merge, progressLine, rows, shortModel, sprite, toolArg, transcript, typeColor, who, wrap } from '../hooks/agents.ts'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const PANE = {
@@ -163,6 +163,22 @@ describe('helpers', () => {
     expect(formatTokens(1_250_000)).toBe('1.3M')
   })
 
+  test('a sprite is five cells wide, fixed per type, and its face follows status', () => {
+    for (const type of ['Explore', 'Plan', 'general-purpose', 'code-reviewer']) {
+      for (const line of sprite(type, 'running', 0)) expect([...line].length).toBe(5)
+    }
+    expect(sprite('Explore', 'running', 0)[0]).toBe(sprite('Explore', 'failed', 0)[0])
+    expect(sprite('Explore', 'running', 0)[1]).toBe('(•‿•)')
+    expect(sprite('Explore', 'running', 2000)[1]).toBe('(-‿-)')
+    expect(sprite('Explore', 'completed', 0)[1]).toBe('(^‿^)')
+    expect(sprite('Explore', 'failed', 0)[1]).toBe('(×_×)')
+  })
+
+  test('the progress line fills when done', () => {
+    expect(progressLine(agent({ steps: 3 }), [10, 10, 10], 10)).toBe('███░░░░░░░ ~30%')
+    expect(progressLine(agent({ status: 'completed' }), undefined, 4)).toBe('████ done')
+  })
+
   test('teammates go by their name', () => {
     expect(who(agent({ isTeammate: true, name: 'reviewer', type: 'teammate' }))).toBe('reviewer')
     expect(who(agent({ type: 'plugin:code-reviewer' }))).toBe('code-reviewer')
@@ -235,6 +251,8 @@ describe('pane', () => {
       expect(await ui.find({ type: 'Text', text: /Explore · find auth code/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /running · 0:00 · ~13% · 2 requests · 2.4k out/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: 'haiku 4.5 · 4.3k context' })).toBeDefined()
+      expect(await ui.find({ key: 'card' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^\(.‿.\)$/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: 'It lives in src/auth.ts.' })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: '→ Grep login' })).toBeDefined()
       await ui.press({ key: 'back' })

@@ -10,8 +10,10 @@ import {
   merge,
   modelColor,
   modelLine,
+  progressLine,
   pushHistory,
   rows,
+  sprite,
   statusColor,
   summary,
   transcript,
@@ -24,8 +26,11 @@ const PANE = 'agents'
 const TITLE = 'Agents'
 const COMMAND = 'agent-pane'
 const HISTORY_PREFIX = 'hist:'
-// Rows the open agent's view spends around its transcript: name, model, summary, two rules, field, notice
-const DETAIL_CHROME = 7
+// Rows the open agent's view spends around its transcript: Back, the card
+// (four lines and its border), two rules, field, notice
+const DETAIL_CHROME = 11
+// The card's border and padding, plus the sprite and the gap after it
+const CARD_CHROME = 4 + 5 + 1
 
 const agents = atom({ plugin: 'agent-pane', key: 'agents' } as const, [] as PaneAgent[])
 const selected = atom({ plugin: 'agent-pane', key: 'selected' } as const, '')
@@ -271,6 +276,8 @@ export const register: Register = on => {
     const room = Math.max(3, e.props.scroll.bodyRows - DETAIL_CHROME)
     const lines: Line[] = Array.isArray(found) ? transcript(found, columns, room) : [{ text: found.deny, isDim: true }]
     const rule = '─'.repeat(Math.max(1, columns))
+    const color = typeColor(agent.type)
+    const barCells = Math.max(4, Math.min(20, columns - CARD_CHROME - 12))
     const typed = await read($, draft)
     const said = await read($, notice)
     // The mobile app draws no field, so there the transcript is read-only
@@ -290,24 +297,45 @@ export const register: Register = on => {
     return Box({
       flexDirection: 'column',
       children: [
+        Button({ key: 'back', label: '← Agents', plain: true, dimColor: true, onPress: () => open($, '') }),
         Box({
+          key: 'card',
           flexDirection: 'row',
           gap: 1,
+          paddingX: 1,
+          borderStyle: 'round',
+          borderColor: color,
           children: [
-            Button({ key: 'back', label: '← Agents', plain: true, dimColor: true, onPress: () => open($, '') }),
-            Text({
-              wrap: 'truncate-end',
+            Box({
+              flexDirection: 'column',
+              children: sprite(agent.type, agent.status, now).map((line, i) =>
+                Text({ key: `s${i}`, color: i === 1 ? statusColor(agent.status) : color, children: [line] }),
+              ),
+            }),
+            Box({
+              flexDirection: 'column',
+              flexGrow: 1,
               children: [
-                Text({ color: statusColor(agent.status), children: [glyph(agent.status)] }),
-                ' ',
-                Text({ color: typeColor(agent.type), bold: true, children: [who(agent)] }),
-                ` · ${agent.description}`,
+                Text({
+                  wrap: 'truncate-end',
+                  children: [
+                    Text({ color: statusColor(agent.status), children: [glyph(agent.status)] }),
+                    ' ',
+                    Text({ color, bold: true, children: [who(agent)] }),
+                    ` · ${agent.description}`,
+                  ],
+                }),
+                Text({ color: modelColor(agent.model), wrap: 'truncate-end', children: [modelLine(agent)] }),
+                Text({
+                  color: agent.status === 'running' ? color : statusColor(agent.status),
+                  wrap: 'truncate-end',
+                  children: [progressLine(agent, history.get(agent.type), barCells)],
+                }),
+                Text({ dimColor: true, wrap: 'truncate-end', children: [summary(agent, history.get(agent.type), now)] }),
               ],
             }),
           ],
         }),
-        Text({ color: modelColor(agent.model), wrap: 'truncate-end', children: [modelLine(agent)] }),
-        Text({ dimColor: true, wrap: 'truncate-end', children: [summary(agent, history.get(agent.type), now)] }),
         Text({ dimColor: true, children: [rule] }),
         ...lines.map(line =>
           Text({ dimColor: line.isDim === true, bold: line.isUser === true, wrap: 'truncate-end', children: [line.text] }),

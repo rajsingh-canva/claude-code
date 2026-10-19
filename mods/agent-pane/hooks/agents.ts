@@ -72,6 +72,21 @@ const NAMED_COLOR: Record<string, string> = {
   pink: '#e5698e',
 }
 
+// A sprite is three lines five cells wide: a top and a body picked by the
+// agent's type, so each type always looks the same, and a face that shows its status
+const SPRITE_TOPS = [' ╷ ╷ ', '  ┃  ', ' ╲ ╱ ', ' ◠ ◠ ', '  ●  ', ' ▴ ▴ ']
+const SPRITE_BODIES = [' /█\\ ', ' ╰┬╯ ', ' ▐█▌ ', ' /▓\\ ', ' ╘═╛ ', ' ▀█▀ ']
+// Each status's frames; a running agent blinks, an idle one dozes
+const FACES: Record<Status, readonly string[]> = {
+  pending: ['(·_·)'],
+  running: ['(•‿•)', '(•‿•)', '(-‿-)'],
+  waiting: ['(°_°)', '(°_°)', '(°_-)'],
+  idle: ['(-_-)', '(-.-)'],
+  completed: ['(^‿^)'],
+  failed: ['(×_×)'],
+  killed: ['(-_-)'],
+}
+
 // Input fields that best name what a tool call was about, in order of preference
 const ARG_KEYS = ['file_path', 'command', 'pattern', 'path', 'url', 'query', 'description', 'prompt']
 
@@ -129,6 +144,14 @@ export function formatTokens(n: number): string {
   if (n < 1000) return String(Math.round(n))
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`
   return `${(n / 1_000_000).toFixed(1)}M`
+}
+
+// The agent's three-line sprite at `now`, one frame a second
+export function sprite(type: string, status: Status, now: number): string[] {
+  const h = hash(shortType(type))
+  const frames = FACES[status]
+  const face = frames[Math.floor(now / 1000) % frames.length]!
+  return [SPRITE_TOPS[h % SPRITE_TOPS.length]!, face, SPRITE_BODIES[Math.floor(h / SPRITE_TOPS.length) % SPRITE_BODIES.length]!]
 }
 
 // Keeps the first `cells` cells of a row's parts, ending in … when it cuts
@@ -322,6 +345,13 @@ export function summary(agent: PaneAgent, history: readonly number[] | undefined
   parts.push(`${agent.steps} request${agent.steps === 1 ? '' : 's'}`)
   if (agent.outputTokens) parts.push(`${formatTokens(agent.outputTokens)} out`)
   return parts.join(' · ')
+}
+
+// The open agent's progress bar and what it stands for
+export function progressLine(agent: PaneAgent, history: readonly number[] | undefined, cells: number): string {
+  const pct = estimatePercent(agent, history)
+  if (agent.status === 'running') return `${bar(pct, cells)} ~${pct}%`
+  return `${bar(agent.status === 'completed' ? 100 : pct, cells)} ${statusWord(agent.status)}`
 }
 
 // The open agent's model line: model, effort and how full its context is
