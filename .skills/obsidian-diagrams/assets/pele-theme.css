@@ -1,0 +1,33 @@
+/*
+ * pele-theme.css — make Pele-rendered diagrams follow the active Obsidian theme (light and dark).
+ *
+ * Install: copy to <vault>/.obsidian/snippets/pele-theme.css, then `obsidian snippet:enable name=pele-theme`.
+ * Has no effect until Obsidian renders diagrams with Pele (Obsidian 1.14.x still uses mermaid.js).
+ * Obsidian may ship its own mapping; this snippet is the place to customise it.
+ * Variables: https://pele.run/theming
+ */
+.pele {
+  --pele-bg: var(--background-primary);
+  --pele-fg: var(--text-normal);
+  --pele-muted: var(--text-muted);
+  --pele-line: var(--text-muted);
+  --pele-surface: var(--background-secondary);
+  --pele-surface-alt: var(--background-modifier-hover);
+  --pele-border: var(--background-modifier-border);
+  --pele-accent: var(--interactive-accent);
+  --pele-critical: var(--text-error);
+  --pele-error: var(--text-error);
+  --pele-font: var(--font-text);
+  --pele-font-mono: var(--font-monospace);
+  --pele-radius: var(--radius-s);
+
+  /* Chart and category colours: Obsidian's adaptive accent palette */
+  --pele-series-1: var(--color-blue);
+  --pele-series-2: var(--color-orange);
+  --pele-series-3: var(--color-green);
+  --pele-series-4: var(--color-red);
+  --pele-series-5: var(--color-cyan);
+  --pele-series-6: var(--color-yellow);
+  --pele-series-7: var(--color-purple);
+  --pele-series-8: var(--color-pink);
+}

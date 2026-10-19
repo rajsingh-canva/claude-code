@@ -1,230 +1,67 @@
 ---
 name: daily-note
-description: Generate a daily note in an Obsidian vault with open Jira tasks and Slack action items pre-populated. At the end of the session, batch-review items added to the note and optionally create them as Jira tasks. Triggers on phrases like "daily note", "create my daily note", "start my day", "open today's note", or "finish daily note" / "done with daily note".
+description: Start the user's Obsidian daily note pre-filled with their open Jira tasks (and Slack action items when available), then at the end of the day batch-review what they added and optionally create or close Jira tasks. Use when the user says "daily note", "create my daily note", "start my day" or "open today's note", and for the wrap-up when they say "finish daily note", "done with daily note" or "wrap up my day". A bare "done" or "end session" counts only when the conversation is about today's daily note. For a quick one-line capture to today's note, obsidian-cli's daily:append is enough.
 ---
 
-# Daily Note Skill
+# Daily Note
 
-Generates a daily note in an Obsidian vault pre-populated with open Jira tasks and Slack action items. At end of session, prompts the user to optionally create any new items as Jira tasks.
+Two moments in the user's day:
+- **Morning:** a daily note in Obsidian with their open Jira work already listed.
+- **End of day:** a quick pass over what they jotted down, turning the real action items into Jira tasks or closing finished ones, with their approval for each.
 
-## Prerequisites
+## Before you start
 
-- Obsidian desktop app must be running (the CLI requires it)
-- Slack MCP plugin must be enabled in `~/.claude/settings.json` — `"slack@claude-plugins-official": true`
-- If Slack MCP is not available/authenticated, the skill gracefully skips that section
-- Jira project key, vault name, and daily notes folder must be known (ask the user if not clear from context)
+- **Obsidian must be running** for the CLI parts. If a command hangs or fails, run `pgrep -x Obsidian || open -ga Obsidian`, wait a few seconds, and retry. CLI details are in the `obsidian-cli` skill.
+- **Jira** comes from the Atlassian MCP tools (names like `getAccessibleAtlassianResources`, `atlassianUserInfo`, `searchJiraIssuesUsingJql`, `createJiraIssue`, `getTransitionsForJiraIssue`, `transitionJiraIssue`; look up the exact prefix in your tool list). If they're missing or unauthenticated, still create the note and say the Jira section is empty and why.
+- **Slack** is optional. If no Slack tool can list saved/"Later" items, use the placeholder below and move on.
+- **Defaults:** vault `TheBible` (`~/TheBible`), daily notes folder `1 - Rough Notes/`, template `5 - Templates/Daily Note Template - {{Date.md`, file name `DD-MM-YYYY.md`, Jira project **DSM** (the template's heading says `Open Jira Tasks (DSM)`). Use another key only if the user names one.
 
-## Skill Invocation
+## Morning: create the note
 
-Triggers on: "daily note", "create my daily note", "start my day", "open today's note"
+1. **Resolve Jira context once.** Get the cloud ID and the user's account ID from the Atlassian tools.
+2. **Fetch open tasks:**
+   - JQL: `project = <KEY> AND assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC`
+   - Fields: `summary,status,priority`
+   - Format each as `- [ ] [<KEY>-123] Summary (In Progress)`. With none, write `- No open tasks.`
+3. **Slack items.** If a saved/later-items tool exists, list items as `- [ ] [Slack] …`. Otherwise use `- Slack Later list is not accessible via MCP — add items manually`.
+4. **Build the note.**
+   - If `1 - Rough Notes/<TODAY>.md` already exists, don't overwrite it. The user may have written in it. Open it (`obsidian open path="1 - Rough Notes/<TODAY>.md"`) and say so.
+   - Otherwise:
+     - get the resolved template with `obsidian template:read name="Daily Note Template - {{Date" resolve title="<TODAY>" vault=TheBible`;
+     - replace the `<!-- populated by daily-note skill -->` placeholders under the `## Open Jira Tasks …` and `## Slack Action Items` headings;
+     - **write the file directly** to `~/TheBible/1 - Rough Notes/<TODAY>.md`. A whole note passed through `obsidian create content=…` gets its quotes, backticks and backslashes mangled.
+   - Then `obsidian open path="1 - Rough Notes/<TODAY>.md" vault=TheBible`. If the CLI says "not found" right after the write, wait a second; Obsidian's index is catching up.
+5. **Tell the user** it's ready, how many Jira tasks were pulled in, and that "finish daily note" starts the end-of-day review.
 
-End-of-session triggers: "done", "finish daily note", "done with daily note", "end session"
+## End of day: review
 
----
+1. **Read the note:** `obsidian read path="1 - Rough Notes/<TODAY>.md"`, or Read the file.
+2. **Collect candidates:**
+   - everything under `## Items to Review for Jira`;
+   - new unchecked action-like lines in `## Daily Notes`.
 
-## Workflow
+   Drop any candidate that mentions a ticket ID already listed in the Open Jira Tasks section. It's already tracked.
+3. **Check for near-duplicates.** For each remaining item, run `project = <KEY> AND summary ~ "<key words>" ORDER BY created DESC` (max 5). If something close exists, show it: "This looks like **KEY-123**: …. Create a new task anyway, or skip?"
+4. **Review one at a time:** "Item 2/5: '…' — create as a Jira task? (yes / no / edit)". Nothing goes to Jira without a yes. Creating tickets is visible to the user's team.
+5. **Create the confirmed tasks** in the project with type `Task`, the item text as summary, and the user as assignee.
+6. **Record the result in the note.** Append a line such as `> Created Jira tasks: KEY-301, KEY-302` with `obsidian-cli`'s `vault_note.py append "1 - Rough Notes/<TODAY>.md"`, or an Edit. `obsidian append` would add a stray blank line. Then summarise for the user.
 
-### Phase 0 — Resolve Context
+**Items that reference an existing ticket** ("close DSM-201") are transitions, not new tasks. Offer to move the ticket: fetch its transitions, pick the one whose status category is `done` (often "Delivered" or "Cancelled"), confirm, and apply it.
 
-Run once at the start of each session before any other steps.
-
-1. Call `mcp__claude_ai_Atlassian__getAccessibleAtlassianResources` to get the Jira cloud ID. Store as `<CLOUD_ID>`.
-2. Call `mcp__claude_ai_Atlassian__atlassianUserInfo` to get the current user's account ID. Store as `<ACCOUNT_ID>`.
-3. Confirm the Jira project key with the user if not already known from context. Store as `<PROJECT_KEY>`.
-4. Confirm the Obsidian vault name and daily notes folder if not already known. Defaults: vault = `TheBible`, folder = `1 - Rough Notes/`.
-
----
-
-### Phase 1 — Fetch Jira Tasks
-
-Run a JQL search for all open tasks assigned to the current user in the configured project:
-
+These two Atlassian calls fail with a validation error if the parameters are shaped wrong, and the names aren't obvious:
 ```
-project = <PROJECT_KEY> AND assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC
-```
-
-Use: `mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql`
-- `cloudId`: `<CLOUD_ID>` (from Phase 0)
-- `jql`: query above
-- `fields`: `summary,status,priority`
-
-Format each result as:
-```
-- [ ] [<PROJECT_KEY>-123] Summary of task (In Progress)
-```
-
-If no tasks found: use `- No open tasks.`
-
-### Phase 2 — Fetch Slack Action Items
-
-The Slack MCP does not expose a "Later list" or "Saved items" API. The available Slack tools are for reading channels/threads and searching messages only.
-
-**Current limitation:** Slack Later items cannot be fetched programmatically. Use this placeholder in the daily note:
-```
-- Slack Later list is not accessible via MCP — add items manually
+getTransitionsForJiraIssue:  cloudId, issueIdOrKey: "DSM-201"            # issueIdOrKey, not issueKey
+transitionJiraIssue:         cloudId, issueIdOrKey: "DSM-201",
+                             transition: { id: "91" }                    # an object with id, not transitionId: "91"
 ```
 
-**If a future Slack MCP version adds a later/saved items tool**, use it here and format results as:
-```
-- [ ] [Slack] Brief description of the item
-```
+## When things go wrong
 
-Do not fail the skill — continue to Phase 3.
-
-### Phase 3 — Build and Create the Daily Note
-
-1. Determine today's date in format: `DD-MM-YYYY` (e.g. `<TODAY>`)
-
-2. Read the template to get the resolved structure:
-   ```bash
-   obsidian template:read name="Daily Note Template - {{Date" resolve title="<TODAY>" vault=<VAULT>
-   ```
-
-3. Build the full note content by replacing the placeholder comment blocks:
-   - Replace `<!-- populated by daily-note skill -->` under `## Open Jira Tasks` with the Jira checklist
-   - Replace `<!-- populated by daily-note skill -->` under `## Slack Action Items` with the Slack list
-
-4. Create the note in the daily notes folder:
-   ```bash
-   obsidian create name="<TODAY>" path="<DAILY_NOTES_FOLDER>/<TODAY>.md" content="<full note content>" vault=<VAULT>
-   ```
-   If the note already exists for today, open it without overwriting:
-   ```bash
-   obsidian open path="<DAILY_NOTES_FOLDER>/<TODAY>.md" vault=<VAULT>
-   ```
-
-5. Open the note in Obsidian:
-   ```bash
-   obsidian open path="<DAILY_NOTES_FOLDER>/<TODAY>.md" vault=<VAULT>
-   ```
-
-6. Confirm to the user:
-   > Your daily note for **<TODAY>** is ready in Obsidian.
-   >
-   > **{N} open Jira tasks** have been pulled in.
-   >
-   > Add anything you want to work on or remember to the **Daily Notes** or **Items to Review for Jira** sections. When you're done, say **"done"** or **"finish daily note"** and I'll do a batch review for Jira task creation.
-
----
-
-## End-of-Session Phase (triggered by "done" / "finish daily note")
-
-### Step 1 — Read back the note
-
-```bash
-obsidian read path="<DAILY_NOTES_FOLDER>/<TODAY>.md" vault=<VAULT>
-```
-
-### Step 2 — Extract items for review
-
-1. Parse the `## Open Jira Tasks` section of the note and extract all ticket IDs already listed (e.g. `<PROJECT_KEY>-201`). This is the **existing tickets set**.
-
-2. Collect all bullet points or lines under `## Items to Review for Jira`.
-
-3. Also collect any new unchecked items the user added to `## Daily Notes` that look like action items (lines starting with `- ` or `- [ ]`).
-
-4. **Filter out duplicates:** For each candidate item, check if it contains a ticket ID that is already in the existing tickets set. If it matches, **skip it silently** — do not offer to create it as a new task.
-
-Only items with no matching existing ticket ID proceed to Step 3.
-
-### Step 3 — Duplicate check
-
-For each candidate item, search Jira for an existing ticket with similar text before presenting it to the user:
-
-```
-project = <PROJECT_KEY> AND summary ~ "<key words from item text>" ORDER BY created DESC
-```
-
-Use: `mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql` with `maxResults=5`
-
-- If a close match is found: show it to the user — "This looks similar to **<PROJECT_KEY>-XXX**: _Summary_. Create a new task anyway, or skip?"
-- If no match found: proceed to Step 4 as normal
-
-### Step 4 — Batch review
-
-Present each candidate item to the user:
-
-> **Item {N}/{total}:** "{item text}"
-> Create this as a Jira task? **[Yes / No / Edit]**
-
-- **Yes**: Create the task (Step 5)
-- **No**: Skip, move to next item
-- **Edit**: Ask the user for revised text, then confirm before creating
-
-### Step 5 — Create Jira tasks
-
-For each confirmed item, call `mcp__claude_ai_Atlassian__createJiraIssue`:
-- `cloudId`: `<CLOUD_ID>` (from Phase 0)
-- `projectKey`: `<PROJECT_KEY>`
-- `issuetype`: `Task`
-- `summary`: item text (or edited version)
-- `assignee`: `<ACCOUNT_ID>` (from Phase 0)
-
-### Step 6 — Update the note
-
-For each created task, append the ticket link to the corresponding item in the note:
-
-```bash
-obsidian append path="<DAILY_NOTES_FOLDER>/<TODAY>.md" content="\n> Created Jira tasks: <PROJECT_KEY>-XXX, <PROJECT_KEY>-YYY" vault=<VAULT>
-```
-
-Then confirm to the user:
-> Session complete. Created **{N} Jira task(s)**: <PROJECT_KEY>-XXX, <PROJECT_KEY>-YYY
-> Your daily note has been updated with the ticket links.
-
----
-
-## Transitioning Existing Tickets
-
-When the end-of-session review finds items that reference existing ticket IDs (e.g. "Close DSM-201"), do not create a new task — instead offer to transition the existing ticket.
-
-Steps:
-1. Call `mcp__claude_ai_Atlassian__getTransitionsForJiraIssue` to get available transitions
-2. Identify the "Done" category transition (statusCategory `key: "done"`) — typically "Delivered" or "Cancelled"
-3. Call `mcp__claude_ai_Atlassian__transitionJiraIssue` with the correct payload
-
-**Critical — correct parameter names:**
-
-```
-# Get transitions — parameter is issueIdOrKey, NOT issueKey
-mcp__claude_ai_Atlassian__getTransitionsForJiraIssue:
-  cloudId: <CLOUD_ID>
-  issueIdOrKey: "DSM-201"   # ← must be issueIdOrKey
-
-# Transition — transition must be an object with an id key, NOT a bare transitionId string
-mcp__claude_ai_Atlassian__transitionJiraIssue:
-  cloudId: <CLOUD_ID>
-  issueIdOrKey: "DSM-201"
-  transition:
-    id: "91"               # ← must be transition: {id: "..."}, not transitionId: "91"
-```
-
-These parameter names are non-obvious and both will fail silently with a validation error if passed incorrectly.
-
----
-
-## Error Handling
-
-| Situation | Action |
-|-----------|--------|
-| Obsidian not running | Inform user: "Please open the Obsidian app first, then try again." |
-| Slack MCP auth error | Skip Slack section, note it in the daily note, continue |
-| Jira API error | Inform user, still create the note with an empty Jira section |
-| Note already exists for today | Open the existing note without overwriting |
-| No items to review | Skip batch review, tell user: "No new items found to review for Jira." |
-| Project key unknown | Ask the user before proceeding |
-| `getTransitionsForJiraIssue` validation error | Check parameter is `issueIdOrKey`, not `issueKey` |
-| `transitionJiraIssue` validation error | Check `transition` is an object `{"id": "..."}`, not a bare `transitionId` string |
-
----
-
-## Key References
-
-- **Obsidian CLI**: `/Applications/Obsidian.app/Contents/MacOS/obsidian` (available in PATH)
-- **Jira cloud ID**: resolved dynamically via `mcp__claude_ai_Atlassian__getAccessibleAtlassianResources`
-- **Jira account ID**: resolved dynamically via `mcp__claude_ai_Atlassian__atlassianUserInfo`
-- **Jira project key**: user-configured — confirm with the user if not known from context
-- **Vault name**: user-configured (default: `TheBible`)
-- **Daily notes folder**: user-configured (default: `1 - Rough Notes/`)
-- **Template**: `5 - Templates/Daily Note Template - {{Date.md`
-- **obsidian-cli skill**: `~/work/personal/claude-code/.skills/obsidian-cli/SKILL.md`
+| Situation | Do |
+|---|---|
+| Obsidian not running | `open -ga Obsidian`, wait, and retry. Only ask the user if it still won't start |
+| Jira tools missing or erroring | Create the note anyway, leave the Jira section empty, explain why |
+| Slack unavailable | Use the placeholder line, continue |
+| Today's note already exists | Open it; never overwrite |
+| Nothing to review | "No new items found to review for Jira." |
+| User works in another project | Ask once, then reuse it for the session |

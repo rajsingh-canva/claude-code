@@ -47,6 +47,7 @@ claude-code/
 │   ├── notebooklm/         # Google NotebookLM via CLI
 │   ├── research-notes/     # Research via NotebookLM
 │   ├── obsidian-cli/       # Obsidian vault CLI operations
+│   ├── obsidian-diagrams/  # Mermaid/Pele diagrams in Obsidian notes
 │   ├── obsidian-zettelkasten/ # Zettelkasten note-taking method
 │   ├── daily-note/         # Obsidian daily notes + Jira/Slack
 │   ├── mdm-profile-builder/ # Apple MDM configuration profiles
@@ -104,8 +105,9 @@ uv run main.py "task description" /path/to/project [--workers N] [--model MODEL]
 |-------|-------------|
 | **notebooklm** | Query, create, and manage Google NotebookLM notebooks and sources via CLI |
 | **research-notes** | Research and summarize URLs, YouTube videos, and PDFs into structured notes using NotebookLM |
-| **obsidian-cli** | Programmatic access to Obsidian vault via CLI — search, create, edit, tag management |
-| **obsidian-zettelkasten** | Zettelkasten note-taking in Obsidian — one idea per note, link-based organization |
+| **obsidian-cli** | Obsidian vault via the official CLI — search, links, tags, properties, templates, bases, snippets, render checks — plus when to edit files directly and a safe `vault_note.py` helper |
+| **obsidian-diagrams** | Create, style, fix and verify Mermaid diagrams in Obsidian notes for today's mermaid.js and the upcoming Pele renderer: all 33 types, theming, looks, live render/layout checks and image export |
+| **obsidian-zettelkasten** | Zettelkasten note-taking in Obsidian — one idea per note, link-based organization, the vault's 13 templates and numbered folders |
 | **daily-note** | Generate and manage Obsidian daily notes with Jira (incl. ticket transitions) and Slack integration |
 | **mdm-profile-builder** | Build Apple MDM configuration profiles (`.mobileconfig`) — payload types, profile anatomy reference |
 | **workato-api-builder** | Turn an API JSON response into a Workato `object_definition` schema and scaffold reusable FUNC recipe functions; extract single-item samples from multi-item responses |

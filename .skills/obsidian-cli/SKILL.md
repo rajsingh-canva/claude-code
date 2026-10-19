@@ -1,245 +1,105 @@
 ---
 name: obsidian-cli
-description: Interact with Obsidian vaults programmatically using the Obsidian CLI. Use when the user wants to search notes, open files in Obsidian, create or edit notes via CLI, list vault contents, manage tags/bookmarks/backlinks, check daily notes, or perform any vault operation from the terminal. Triggers on phrases like "obsidian cli", "open vault", "search notes", "edit note in obsidian", "find in vault", "list my notes", "open in obsidian", "daily note", vault management requests, or any Obsidian file operation.
+description: Work with the user's Obsidian vault (TheBible) through the official Obsidian CLI — search notes, read or open them, backlinks and outgoing links, orphans, tags, aliases, properties/frontmatter, templates, tasks, bases, bookmarks, quick capture to today's daily note, CSS snippets, themes and plugins, sync and file history, and checking how a note actually renders (screenshot, DOM, errors). Use whenever the user wants to find, open, inspect or manage anything in their Obsidian vault, even if they don't say "CLI", and to decide when a plain file edit is the better tool. For starting the daily note with Jira/Slack use daily-note; for Zettelkasten note content use obsidian-zettelkasten; for diagrams use obsidian-diagrams.
 ---
 
 # Obsidian CLI
 
-Programmatic access to Obsidian vaults via the built-in CLI. Requires Obsidian desktop app to be running.
+Obsidian ships a CLI that talks to the running app, so it sees what Obsidian sees: the link graph, tags, properties, templates, tasks, sync history, and the rendered page. The vault itself is plain markdown on disk at `~/TheBible`, though, so for writing content a direct file edit is often the better tool. Picking the right one is most of the skill.
 
-## Setup
+## Setup and health check
 
-The CLI is a dedicated binary bundled inside the app at `/Applications/Obsidian.app/Contents/MacOS/obsidian-cli` — a separate binary from the main GUI app launcher (`Obsidian`/`obsidian`, same directory).
+- The CLI is a separate binary, `/Applications/Obsidian.app/Contents/MacOS/obsidian-cli`. Obsidian's setting (Settings → General → Command line interface) links it as **`/opt/homebrew/bin/obsidian`** on this Mac.
+- Check it with `readlink "$(command -v obsidian)"`, which should end in `obsidian-cli`.
+- `~/.zprofile` also adds `…/Obsidian.app/Contents/MacOS` to `PATH`. That's harmless while `/opt/homebrew/bin` comes first. Never `export` that directory yourself: on macOS's case-insensitive disk, a bare `obsidian` there resolves to the GUI app, and commands turn into "would like to control Obsidian" prompts.
+- **The app must be running.** If commands hang or fail, run `pgrep -x Obsidian || open -ga Obsidian`, wait a few seconds, and retry. Do this yourself rather than asking the user. If it still won't answer, fall back to direct file operations for anything that doesn't need the index.
+- **The CLI sometimes keeps running after printing its result.** In scripts, use a hard timeout (`timeout -s KILL 20 obsidian …`, or a subprocess timeout) and keep whatever it printed.
+- The user's vault is **TheBible**. Pass `vault=TheBible` whenever more than one vault could be open; it's harmless otherwise.
 
-Register it via **Obsidian → Settings → General → "Command line interface"** (toggle on). This creates a symlink at `/usr/local/bin/obsidian` pointing to the `obsidian-cli` binary, and will prompt for your admin password via a system dialog to create it.
+## CLI or direct file edit?
 
-Do **not** add `/Applications/Obsidian.app/Contents/MacOS` to `PATH` directly — macOS's default case-insensitive filesystem means a plain `obsidian` on PATH resolves to the main GUI launcher (`Obsidian`) instead of `obsidian-cli`, which silently breaks CLI usage: write commands end up puppeting the live GUI app over macOS Apple Events (triggering repeated "X would like to control Obsidian" Automation permission prompts) instead of using the dedicated CLI's own IPC.
+| Job | Use | Why |
+|---|---|---|
+| Write or replace note content: anything multi-line, or containing backticks, quotes, code, diagrams or backslashes | **Write/Edit the file** at `~/TheBible/<path>.md` | `content=` turns `\n`/`\t` into newline/tab with no way to escape a literal backslash, and shell quoting mangles the rest |
+| Append a block or line to a note, or a numbered entry to an index (tag indexes, context/plan notes) | `scripts/vault_note.py append [--tight]` / `append-index` | `obsidian append` inserts a newline before the text, so a file already ending in one gets a stray blank line |
+| Create a missing tag note | `scripts/vault_note.py ensure-tag <Tag>` | Uses the vault's tag style (`\n# Tag`) |
+| `7 - Context/`, `8 - Plans/`, `3 - Tags/` bookkeeping | Direct file I/O (+ `vault_note.py`) | Plain files with fixed formats; no index needed |
+| Search, backlinks/links, orphans, unresolved links, tags, tasks, properties, outline | **CLI** | It uses Obsidian's index and resolves links like Obsidian does. `obsidian search` is much faster than grep across the vault |
+| Create from an Obsidian template; resolve template variables | **CLI** (`create template=…`, `template:read resolve`) | Template variables are resolved by Obsidian |
+| Open or show something to the user | **CLI** (`open`, `daily`, `search:open`) | Only the app can do it |
+| Rename or move a note | **CLI** (`rename`, `move`) | Obsidian updates every link to it; `mv` would break them |
+| Check how a note renders | **CLI** (`dev:screenshot`, `dev:dom`, `dev:errors`) | See "Checking rendered output" below |
 
-Verify with `readlink /usr/local/bin/obsidian` — it should point to `.../Contents/MacOS/obsidian-cli`, not resolve to the GUI app. If the toggle doesn't create the symlink (e.g. it was already on from a previous Obsidian version), toggle it off and back on to re-trigger registration.
+**After writing a file directly, give the index a second or two** before running a CLI command that looks it up. Straight after a direct write, `obsidian append path=…` can report "File not found".
 
-**Important:** The CLI communicates with the running Obsidian app. Obsidian must be open for commands to work.
+## Syntax
 
-### Default Vault
-
-The user's primary vault is **TheBible** at `~/TheBible/`. Target it explicitly when multiple vaults exist:
-
-```bash
-obsidian <command> vault=TheBible
 ```
-
-## Command Syntax
-
+obsidian <command> [key=value ...] [flags] vault=TheBible
 ```
-obsidian <command> [key=value ...] [flags]
-```
+- `path=` is exact and vault-relative (`6 - Main Notes/My Note.md`, with no `TheBible/` prefix). `file=` resolves a name like a wikilink. **Always pass `path=` or `file=` in automation.** Without them, most commands act on whatever note is active, which could be anything.
+- Quote values with spaces: `name="My Note"`. Flags are bare words (`total`, `counts`, `inline`, `open`).
+- Many list commands take `format=json|tsv|csv`; prefer `json` when you'll parse the output.
 
-- `file=<name>` resolves by name (like wikilinks)
-- `path=<path>` is an exact path (e.g., `Main Notes/my-note.md`)
-- Quote values with spaces: `name="My Note"`
-- Use `\n` for newline, `\t` for tab in content values
-- Most commands default to the active file when `file`/`path` is omitted
-
-## Quick Reference
-
-### File Operations
+## Core commands
 
 | Task | Command |
-|------|---------|
-| Create a note | `obsidian create name="Note Title" content="..." vault=TheBible` |
-| Create from template | `obsidian create name="Note Title" template="Template Name" vault=TheBible` |
-| Read a note | `obsidian read file="Note Title" vault=TheBible` |
-| Open in Obsidian | `obsidian open file="Note Title" vault=TheBible` |
-| Open in new tab | `obsidian open file="Note Title" newtab vault=TheBible` |
-| Append to note | `obsidian append file="Note Title" content="new text" vault=TheBible` |
-| Prepend to note | `obsidian prepend file="Note Title" content="new text" vault=TheBible` |
-| Delete a note | `obsidian delete file="Note Title" vault=TheBible` |
-| Move/rename | `obsidian move file="Old Name" to="Folder/new-name.md" vault=TheBible` |
-| Rename | `obsidian rename file="Old Name" name="New Name" vault=TheBible` |
-| File info | `obsidian file file="Note Title" vault=TheBible` |
-| Word count | `obsidian wordcount file="Note Title" vault=TheBible` |
+|---|---|
+| Search (fast, index-backed) | `obsidian search query="term" [path="6 - Main Notes"] [limit=20] [format=json]` |
+| Search with surrounding lines | `obsidian search:context query="term"` |
+| Read a note | `obsidian read path="…"` (or just Read the file) |
+| Heading outline | `obsidian outline path="…" [format=json]` |
+| Open for the user | `obsidian open path="…" [newtab]` |
+| Backlinks / outgoing links | `obsidian backlinks path="…" [counts]` · `obsidian links path="…"` |
+| Orphans / dead ends / broken links | `obsidian orphans` · `obsidian deadends` · `obsidian unresolved [verbose]` |
+| Tags | `obsidian tags counts sort=count` · `obsidian tags path="…"` · `obsidian tag name="x" verbose` |
+| Aliases | `obsidian aliases path="…"` |
+| Properties | `obsidian properties path="…"` · `property:read` / `property:set name=… value=…` / `property:remove` |
+| Templates | `obsidian templates` · `template:read name="…" resolve title="…"` · `create path="…" template="…"` |
+| Create (refuses if it exists) | `obsidian create path="Folder/Name.md" [template="…"] [open]` |
+| Rename / move (links updated) | `obsidian rename path="…" name="New"` · `obsidian move path="…" to="Folder/New.md"` |
+| Tasks | `obsidian tasks todo` · `tasks path="…"` · `task path="…" line=5 toggle` |
+| Daily note | `obsidian daily:path` · `daily:read` · `daily:append content="one line"` |
+| Bases | `obsidian bases` · `base:query path="…" [view="…"] format=json` |
+| Bookmarks | `obsidian bookmarks` · `bookmark file="…"` |
+| CSS snippets | `obsidian snippets` · `snippets:enabled` |
+| Vault info | `obsidian vault` · `obsidian files folder="…" [total]` · `obsidian folders` · `obsidian version` |
+| File history | `obsidian history path="…"` · `history:read path="…" version=N` · `diff path="…" from=1 to=2` |
 
-### Search
+The full list (about 100 commands with every flag) is in `references/commands.md`. `obsidian help <command>` is always the final word.
 
-| Task | Command |
-|------|---------|
-| Search vault | `obsidian search query="search term" vault=TheBible` |
-| Search with context | `obsidian search:context query="search term" vault=TheBible` |
-| Search in folder | `obsidian search query="term" path="Main Notes" vault=TheBible` |
-| Case-sensitive | `obsidian search query="Term" case vault=TheBible` |
-| JSON output | `obsidian search query="term" format=json vault=TheBible` |
-| Count matches | `obsidian search query="term" total vault=TheBible` |
-| Open search UI | `obsidian search:open query="term" vault=TheBible` |
+## What needs the user's OK
 
-### Vault Navigation
+- **Run freely:** everything read-only (search, read, list, links, tags, properties, outline, history, `version`). The user has said reading their notes never needs permission.
+- **Fine within the task:** creating notes, appending, setting properties, toggling tasks, opening notes, renaming or moving notes the task is about.
+- **Ask first:**
+  - Creating, renaming, moving or deleting **folders**. The user's numbered folder layout is deliberate, and Sync pushes every change to all devices. Keep scratch and test files outside the vault.
+  - `delete`: it goes to the system Trash. Never use `permanent`.
+  - `create … overwrite`.
+  - `history:restore` / `sync:restore`.
+  - `sync off`.
+  - `plugin:install`/`uninstall`/`enable`/`disable`, `theme:install`/`set`, `snippet:enable`/`disable`.
+  - `reload` / `restart`.
+  - `command id=…` for anything that isn't read-only.
+  - Any `eval` or `dev:cdp` that changes state.
 
-| Task | Command |
-|------|---------|
-| List all files | `obsidian files vault=TheBible` |
-| Files in folder | `obsidian files folder="Main Notes" vault=TheBible` |
-| File count | `obsidian files total vault=TheBible` |
-| List folders | `obsidian folders vault=TheBible` |
-| Vault info | `obsidian vault vault=TheBible` |
-| List vaults | `obsidian vaults verbose` |
-| Recent files | `obsidian recents vault=TheBible` |
-| Random note | `obsidian random vault=TheBible` |
+  These change data, settings, or how every note looks.
 
-### Tags & Links
+## Checking rendered output
 
-| Task | Command |
-|------|---------|
-| List all tags | `obsidian tags vault=TheBible` |
-| Tags with counts | `obsidian tags counts sort=count vault=TheBible` |
-| Tags for a file | `obsidian tags file="Note Title" vault=TheBible` |
-| Tag info | `obsidian tag name="tagname" verbose vault=TheBible` |
-| Backlinks | `obsidian backlinks file="Note Title" vault=TheBible` |
-| Outgoing links | `obsidian links file="Note Title" vault=TheBible` |
-| Orphan notes | `obsidian orphans vault=TheBible` |
-| Dead-end notes | `obsidian deadends vault=TheBible` |
-| Unresolved links | `obsidian unresolved vault=TheBible` |
+When the question is "does it actually show up right?":
+- `obsidian dev:screenshot path=/absolute/path.png`. **Always give an absolute path.** A relative one lands in the vault, and Sync copies it to every device.
+- `obsidian dev:dom selector="…" [text|all|attr=…]` queries the rendered page. `obsidian dev:errors [clear]` shows captured errors. `dev:console` needs `dev:debug on` first, and `dev:debug off` afterwards.
+- `obsidian eval code="…"` runs JavaScript inside the app (`app.workspace`, `app.vault`, …) and awaits promises. Read-only inspection is fine. Never pass note content or other untrusted text inside `code=`; base64-encode it instead.
+- For diagrams, use `obsidian-diagrams`' `check_diagrams.py`. It does all of this safely.
 
-### Daily Notes
+## Vault map
 
-| Task | Command |
-|------|---------|
-| Open daily note | `obsidian daily vault=TheBible` |
-| Read daily note | `obsidian daily:read vault=TheBible` |
-| Get daily path | `obsidian daily:path vault=TheBible` |
-| Append to daily | `obsidian daily:append content="text" vault=TheBible` |
-| Prepend to daily | `obsidian daily:prepend content="text" vault=TheBible` |
+`1 - Rough Notes` · `2 - Source Material` · `3 - Tags` (tag notes, linked as `[[Tag]]`) · `4 - Indexes` · `5 - Templates` · `6 - Main Notes` · `7 - Context` (Claude session notes) · `8 - Plans` (Claude plan notes). Confirm with `obsidian folders` if anything looks off.
 
-### Properties (Frontmatter)
+## Helpers
 
-| Task | Command |
-|------|---------|
-| List all properties | `obsidian properties vault=TheBible` |
-| File properties | `obsidian properties file="Note" vault=TheBible` |
-| Read property | `obsidian property:read name="status" file="Note" vault=TheBible` |
-| Set property | `obsidian property:set name="status" value="draft" file="Note" vault=TheBible` |
-| Remove property | `obsidian property:remove name="old-prop" file="Note" vault=TheBible` |
+- `scripts/vault_note.py`: `append-index`, `ensure-tag`, `append` (see its `--help`). Python 3.12, stdlib, works without the app.
+- `references/commands.md`: the full CLI reference (Obsidian 1.14.4).
 
-### Templates
-
-| Task | Command |
-|------|---------|
-| List templates | `obsidian templates vault=TheBible` |
-| Read template | `obsidian template:read name="Template Name" vault=TheBible` |
-| Read with variables resolved | `obsidian template:read name="Template Name" resolve title="My Note" vault=TheBible` |
-| Insert into active file | `obsidian template:insert name="Template Name" vault=TheBible` |
-
-### Bookmarks
-
-| Task | Command |
-|------|---------|
-| List bookmarks | `obsidian bookmarks vault=TheBible` |
-| Bookmark a file | `obsidian bookmark file="Note Title" vault=TheBible` |
-| Bookmark a heading | `obsidian bookmark file="Note" subpath="#Section" vault=TheBible` |
-
-### Tasks (Checkboxes)
-
-| Task | Command |
-|------|---------|
-| List all tasks | `obsidian tasks vault=TheBible` |
-| Incomplete tasks | `obsidian tasks todo vault=TheBible` |
-| Completed tasks | `obsidian tasks done vault=TheBible` |
-| Tasks in file | `obsidian tasks file="Note" vault=TheBible` |
-| Toggle task | `obsidian task path="Note.md" line=5 toggle vault=TheBible` |
-| Daily tasks | `obsidian tasks daily vault=TheBible` |
-
-### Plugins & Themes
-
-| Task | Command |
-|------|---------|
-| List plugins | `obsidian plugins vault=TheBible` |
-| Enabled plugins | `obsidian plugins:enabled vault=TheBible` |
-| Enable plugin | `obsidian plugin:enable id="plugin-id" vault=TheBible` |
-| Install plugin | `obsidian plugin:install id="plugin-id" enable vault=TheBible` |
-
-### Sync & History
-
-| Task | Command |
-|------|---------|
-| Sync status | `obsidian sync:status vault=TheBible` |
-| Pause sync | `obsidian sync off vault=TheBible` |
-| Resume sync | `obsidian sync on vault=TheBible` |
-| File history | `obsidian history file="Note" vault=TheBible` |
-| Read history version | `obsidian history:read file="Note" version=1 vault=TheBible` |
-| Restore version | `obsidian history:restore file="Note" version=2 vault=TheBible` |
-
-### Output Formats
-
-Many commands support `format=` for structured output:
-- `format=json` — machine-readable JSON
-- `format=tsv` — tab-separated (default for most list commands)
-- `format=csv` — comma-separated
-- `format=text` — plain text (default for search)
-- `format=md` — markdown (for base queries)
-
-## Common Workflows
-
-### Search and Open a Note
-
-```bash
-# Find notes about a topic
-obsidian search:context query="machine learning" vault=TheBible
-
-# Open the one you want
-obsidian open file="Machine Learning Basics" vault=TheBible
-```
-
-### Create a Note from Template
-
-```bash
-# List available templates
-obsidian templates vault=TheBible
-
-# Create using a template
-obsidian create name="New Zettelkasten Note" template="Zettelkasten Main Note Template" vault=TheBible open
-```
-
-### Quick Capture to Daily Note
-
-```bash
-obsidian daily:append content="Idea: explore connection between X and Y" vault=TheBible
-```
-
-### Find Orphan and Dead-End Notes
-
-```bash
-# Notes nothing links to
-obsidian orphans vault=TheBible
-
-# Notes that link to nothing
-obsidian deadends vault=TheBible
-
-# Broken links
-obsidian unresolved vault=TheBible
-```
-
-### Vault Health Check
-
-```bash
-obsidian files total vault=TheBible
-obsidian orphans total vault=TheBible
-obsidian deadends total vault=TheBible
-obsidian unresolved total vault=TheBible
-obsidian tags counts sort=count vault=TheBible
-```
-
-## Error Handling
-
-| Situation | Action |
-|-----------|--------|
-| Command hangs or no response | Ensure Obsidian desktop app is running |
-| "Vault not found" | Check `obsidian vaults verbose` for available vaults |
-| File not found with `file=` | Try `path=` with exact relative path instead |
-| Command not recognized | Run `obsidian help` or `obsidian help <command>` |
-
-## Integration with Zettelkasten Workflow
-
-When used alongside the `obsidian-zettelkasten` skill:
-- Use `obsidian search` to find related notes before creating new ones
-- Use `obsidian backlinks` and `obsidian links` to verify note connectivity
-- Use `obsidian orphans` to find notes that need linking
-- Use `obsidian tags counts sort=count` to identify candidates for Index notes
-- Use `obsidian create template=...` to create notes from vault templates
-- Use `obsidian properties` to inspect and set frontmatter metadata
+Related skills: `obsidian-zettelkasten` (what to write and where), `daily-note` (the Jira/Slack daily note workflow), `obsidian-diagrams` (Mermaid/Pele diagrams).
