@@ -9,7 +9,7 @@ Tested with Claude Code 2.1.289. Mods need 2.1.287 or later.
 | [`agent-progress`](agent-progress/) | Draws a progress bar for each running subagent in the band above the prompt. Above 4 agents it switches to one overall bar plus a percentage per agent. |
 | [`eco-meter`](eco-meter/) | Pins a line under the prompt with the water and trees behind this session's spend and the month's `/usage` spend. See its [README](eco-meter/README.md). |
 | [`cache-warm`](cache-warm/) | Pins a line under the prompt saying whether the main conversation's prompt cache is still warm, with a countdown and a toast before it goes cold. |
-| [`agent-pane`](agent-pane/) | A pane docked to the right of the transcript listing every agent with its progress. Click one to read its transcript, and message it from there. |
+| [`agent-pane`](agent-pane/) | A pane docked to the right of the transcript listing every agent, colour-coded, with its model and progress, plus a roster of the agents you've made. Click one to see it as a sprite card, read its transcript and message it. |
 
 ## agent-progress
 
@@ -40,14 +40,22 @@ While you're idle it shows one toast before the cache goes cold: 5 minutes ahead
 
 ```
 2 agents · 1 running
- ● Explore  find auth code       ████░░░░ ~48%  0:42
-▸✓ Plan     design the pane                done  1:10
+ ● Explore  haiku 4.5  find auth code  ████░░░░ ~48%  0:42
+▸✓ Plan     opus 5.5   design the pane           done  1:10
+Your agents
+ ■ researcher    opus     ran 6× · ~12 steps
+ ■ test-writer   sonnet   not run yet
 Open one to read it or message it.
 ```
 
 ```
-← Agents  ● Explore · find auth code
-running · 0:42 · ~48% · 7 requests
+← Agents
+╭──────────────────────────────────────╮
+│   ●    ● Explore · find auth code    │
+│ (•‿•)  haiku 4.5 · 42k context       │
+│  ▐█▌   ████████░░░░░░░░ ~48%         │
+│        running · 0:42 · ~48% · 7 re… │
+╰──────────────────────────────────────╯
 ────────────────────────────────────────
 › Find the auth code
 Looking in src.
@@ -58,6 +66,12 @@ Message Explore…                    send
 ```
 
 The pane lists the session's subagents and teammates, running ones first, with the same progress estimate as `agent-progress` (model requests against the median of that type's last 20 runs). `▸` marks the agent whose transcript you have open from the tasks list. Finished agents stay listed, up to 50, so you can still open them.
+
+Colours: the status glyph and word use your theme's status colours (running, waiting, done, failed). Each agent type has its own colour for its name, bar and card, taken from its definition's `color:` frontmatter when it has one, otherwise picked from a palette by its name so it never changes. The model chip is coloured by family: opus, sonnet, haiku, fable.
+
+Each type also gets a text sprite: its top and body are fixed per type, and its face shows status (`(•‿•)` running and blinking, `(-_-)` idle, `(^‿^)` done, `(×_×)` failed). The open agent's card shows its model, effort, context size, output tokens and a progress bar.
+
+**Your agents** lists the agent types you can call on: definitions in `.claude/agents/` and `~/.claude/agents/`, plugin agents Claude Code offers, and any built-in you have run, most-run first with their run count and typical steps. Ones running now are marked. Open one for its card and description.
 
 Click an agent (or Tab to it and press Enter) to open it in the pane: its prompt, what it said and a line per tool call, newest at the bottom. Type in the field and press Enter to message it. A finished subagent is resumed with the message, as SendMessage does. `← Agents` goes back to the list.
 

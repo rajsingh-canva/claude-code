@@ -313,11 +313,11 @@ export function rows(
   const tails = list.map(agent => {
     const pct = estimatePercent(agent, histories.get(agent.type))
     const clock = formatElapsed((agent.finishedAt ?? now) - agent.startedAt)
-    return [...progressParts(agent, pct, barCells, typeColor(agent.type)), { text: ' ' + clock.padStart(5), color: 'inactive' }]
+    return [...progressParts(agent, pct, barCells, typeColor(agent.type, agent.color)), { text: ' ' + clock.padStart(5), color: 'inactive' }]
   })
   const tailWidth = Math.max(...tails.map(tail => width(tail.map(p => p.text).join(''))))
   return list.map((agent, i) => {
-    const color = typeColor(agent.type)
+    const color = typeColor(agent.type, agent.color)
     const isViewed = agent.id === viewedId
     const head: Part[] = [
       { text: isViewed ? '▸' : ' ', color: 'claude' },

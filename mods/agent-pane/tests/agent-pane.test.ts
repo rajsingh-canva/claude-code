@@ -2,6 +2,7 @@ import type { AgentInfo, On, SessionMessage } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import type { PaneAgent } from '../types'
+import { buildRoster, paint, parseDefinition, rosterRows, runsText } from '../hooks/roster.ts'
 import { cutParts, estimatePercent, formatTokens, merge, progressLine, rows, shortModel, sprite, toolArg, transcript, typeColor, who, wrap } from '../hooks/agents.ts'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -30,6 +31,8 @@ const TRANSCRIPT: SessionMessage[] = [
 
 type World = {
   listed: AgentInfo[]
+  // Agent definition files by folder, read through $.fs
+  files: Record<string, Record<string, string>>
   opened: string[]
   sent: { to: unknown; text: string }[]
   refusal?: string
@@ -43,6 +46,17 @@ function engine(on: On, world: World) {
   let count = 0
   on('agent.spawn', () => ({ model: 'claude-haiku-4-5', agentId: `a${++count}` }))
   on('agent.list', () => ({ value: world.listed }))
+  on('env.get', () => ({ value: '/home/me' }))
+  on('fs.list', (_$, e) => {
+    const dir = world.files[e.path]
+    if (!dir) throw new Error(`no such folder ${e.path}`)
+    return { value: Object.keys(dir).map(name => ({ name, kind: 'file' as const, size: 1 })) }
+  })
+  on('fs.read', (_$, e) => {
+    const cut = e.path.lastIndexOf('/')
+    return { value: world.files[e.path.slice(0, cut)]![e.path.slice(cut + 1)]! }
+  })
+  on('agent.offer', () => ({ isOffered: true }))
   on('session.messages', (_$, e) => ({ value: e.agentId === 'a1' ? TRANSCRIPT : { deny: `no transcript for ${e.agentId}` } }))
   on('session.send', (_$, e) => {
     world.sent.push({ to: e.to, text: e.text })
@@ -65,7 +79,7 @@ function engine(on: On, world: World) {
 }
 
 function newWorld(): World {
-  return { listed: [], opened: [], sent: [] }
+  return { listed: [], opened: [], sent: [], files: {} }
 }
 
 async function start($: any) {
@@ -177,6 +191,61 @@ describe('helpers', () => {
   test('the progress line fills when done', () => {
     expect(progressLine(agent({ steps: 3 }), [10, 10, 10], 10)).toBe('███░░░░░░░ ~30%')
     expect(progressLine(agent({ status: 'completed' }), undefined, 4)).toBe('████ done')
+  })
+
+  test('a definition reads its frontmatter', () => {
+    const text = '---\nname: researcher\ndescription: "Deep research"\nmodel: opus\ncolor: purple\n---\nBody'
+    expect(parseDefinition(text, 'user')).toEqual({ name: 'researcher', description: 'Deep research', model: 'opus', color: 'purple', source: 'user' })
+    expect(parseDefinition('no frontmatter', 'user')).toBe(undefined)
+    expect(parseDefinition('---\ndescription: x\n---', 'user')).toBe(undefined)
+  })
+
+  test('the roster puts definitions, offered agents and run built-ins together, most-run first', () => {
+    const defs = [
+      { name: 'researcher', description: 'Deep research', model: 'opus', source: 'project' },
+      { name: 'researcher', description: 'user copy', source: 'user' },
+      { name: 'test-writer', description: '', source: 'user' },
+    ]
+    const offers = [
+      { name: 'Explore', description: 'Fast search', source: 'built-in' },
+      { name: 'Plan', description: 'Plans', source: 'built-in' },
+      { name: 'superpowers:code-reviewer', description: 'Reviews', source: 'plugin' },
+      { name: 'test-writer', description: 'Writes tests', source: 'user' },
+    ]
+    const history = new Map([['Explore', [4, 6, 8]], ['plugin:researcher', [9]]])
+    const roster = buildRoster(defs, offers, history)
+    expect(roster.map(r => [r.name, r.runs])).toEqual([
+      ['Explore', 3],
+      ['researcher', 1],
+      ['code-reviewer', 0],
+      ['test-writer', 0],
+    ])
+    expect(roster[0]).toMatchObject({ typicalSteps: 6, source: 'built-in' })
+    expect(roster[1]).toMatchObject({ description: 'Deep research', source: 'project' })
+    expect(roster[3]!.description).toBe('Writes tests')
+    expect(runsText(roster[0]!)).toBe('ran 3× · ~6 steps')
+    expect(runsText({ runs: 20 })).toBe('ran 20+×')
+    expect(runsText({ runs: 0 })).toBe('not run yet')
+  })
+
+  test('agents take their definition colour', () => {
+    const [painted, plain] = paint(
+      [agent({ id: 'a1', type: 'plugin:researcher' }), agent({ id: 'a2', type: 'Explore' })],
+      [{ name: 'researcher', description: '', color: 'purple', source: 'user', runs: 0 }],
+    )
+    expect(painted!.color).toBe('purple')
+    expect(plain!.color).toBe(undefined)
+    const [row] = rows([painted!], new Map(), 0, 60)
+    expect(row!.parts.find(p => p.text.startsWith('researcher'))?.color).toBe('#b07cc6')
+  })
+
+  test('roster rows mark running agents and fold the rest', () => {
+    const roster = ['a', 'b', 'c'].map(name => ({ name, description: '', source: 'user', runs: 0 }))
+    const { rows: drawn, hidden } = rosterRows(roster, new Set(['b']), 50, 2)
+    expect(drawn.map(r => r.name)).toEqual(['a', 'b'])
+    expect(drawn[1]!.label).toContain('● running')
+    expect(drawn[0]!.label).toContain('not run yet')
+    expect(hidden).toBe(1)
   })
 
   test('teammates go by their name', () => {
@@ -327,6 +396,35 @@ describe('pane', () => {
     await ui.unmount()
   })
 
+  test('lists your agents from definitions and offers, and opens one as a card', async ($, on) => {
+    const world = newWorld()
+    world.files['/tmp/.claude/agents'] = {
+      'researcher.md': '---\nname: researcher\ndescription: Deep research\nmodel: opus\ncolor: purple\n---\n',
+      'notes.txt': 'skipped',
+    }
+    world.files['/home/me/.claude/agents'] = { 'test-writer.md': '---\nname: test-writer\ndescription: Writes tests\nmodel: sonnet\n---\n' }
+    engine(on, world)
+    await start($)
+    await $.agent.offer({ agent: 'superpowers:code-reviewer', description: 'Reviews', source: 'plugin', provider: { plugin: 'superpowers', tier: 'user' } })
+    for (const surface of SURFACES) {
+      const ui = await mount($, surface)
+      expect(await ui.find({ type: 'Text', text: 'Your agents' })).toBeDefined()
+      const keys = (await ui.findAll({ type: 'Button' })).map((b: { key: string }) => b.key).sort()
+      expect(keys).toEqual(['def:code-reviewer', 'def:researcher', 'def:test-writer'])
+      expect(String((await ui.find({ key: 'def:researcher' }))?.props.label)).toContain('opus')
+      await ui.press({ key: 'def:researcher' })
+      expect(await ui.find({ key: 'card' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'Deep research' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'not run yet · project' })).toBeDefined()
+      await ui.press({ key: 'back' })
+      await ui.unmount()
+    }
+    await spawn($, 'researcher', 'dig in')
+    const ui = await mount($, 'terminal')
+    expect(String((await ui.find({ key: 'def:researcher' }))?.props.label)).toContain('● running')
+    await ui.unmount()
+  })
+
   test('the command opens the pane when asked', async ($, on) => {
     const world = newWorld()
     engine(on, world)
@@ -340,7 +438,7 @@ describe('pane', () => {
     expect(ran).toMatchObject({ text: 'Agents pane opened.' })
     expect(world.opened).toEqual(['agents'])
     const ui = await mount($, 'terminal')
-    expect(await ui.find({ type: 'Text', text: 'No agents yet' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'No agents running' })).toBeDefined()
     await ui.unmount()
   })
 })
