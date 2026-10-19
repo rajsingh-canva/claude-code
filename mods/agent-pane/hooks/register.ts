@@ -8,6 +8,8 @@ import {
   glyph,
   isActive,
   merge,
+  modelColor,
+  modelLine,
   pushHistory,
   rows,
   statusColor,
@@ -22,8 +24,8 @@ const PANE = 'agents'
 const TITLE = 'Agents'
 const COMMAND = 'agent-pane'
 const HISTORY_PREFIX = 'hist:'
-// Rows the open agent's view spends around its transcript: name, summary, two rules, field, notice
-const DETAIL_CHROME = 6
+// Rows the open agent's view spends around its transcript: name, model, summary, two rules, field, notice
+const DETAIL_CHROME = 7
 
 const agents = atom({ plugin: 'agent-pane', key: 'agents' } as const, [] as PaneAgent[])
 const selected = atom({ plugin: 'agent-pane', key: 'selected' } as const, '')
@@ -161,6 +163,7 @@ export const register: Register = on => {
       isTeammate: e.isTeammate === true,
       startedAt: now,
       steps: 0,
+      model: spawned.model ?? e.model ?? e.parentModel,
     }
     if (e.name !== undefined) agent.name = e.name
     await update($, agents, list => (list.some(a => a.id === id) ? list : [...list, agent]))
@@ -171,18 +174,40 @@ export const register: Register = on => {
     // The agent has started by the time anything here can fail: answer with that spawn, never a second one
     .catch(($, e, next) => next(e))
 
-  // Each model request an agent makes is one step towards its estimate
+  // Each model request an agent makes is one step towards its estimate, and
+  // says which model and effort it ran on and what it cost
   on('turn.step', async function* ($, e, next) {
     const id = e.agentId
-    if (id !== undefined && (await read($, agents)).some(a => a.id === id)) {
+    const isOurs = id !== undefined && (await read($, agents)).some(a => a.id === id)
+    if (isOurs) {
       const now = await $.clock.now()
+      const effort = e.effort === undefined ? undefined : String(e.effort)
       // max() keeps a retried request from counting twice; a step of a finished agent means it was resumed
       await update($, agents, list =>
-        list.map(a => (a.id === id ? { ...withStatus(a, 'running', now), steps: Math.max(isActive(a) ? a.steps : 0, e.index + 1) } : a)),
+        list.map(a =>
+          a.id === id
+            ? {
+                ...withStatus(a, 'running', now),
+                steps: Math.max(isActive(a) ? a.steps : 0, e.index + 1),
+                model: e.model,
+                ...(effort === undefined ? {} : { effort }),
+              }
+            : a,
+        ),
       )
       startTick($)
     }
-    return yield* next(e)
+    const result = yield* next(e)
+    const usage = result.usage
+    if (isOurs && usage) {
+      const context = usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens
+      await update($, agents, list =>
+        list.map(a =>
+          a.id === id ? { ...a, outputTokens: (a.outputTokens ?? 0) + usage.output_tokens, contextTokens: context } : a,
+        ),
+      )
+    }
+    return result
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -281,6 +306,7 @@ export const register: Register = on => {
             }),
           ],
         }),
+        Text({ color: modelColor(agent.model), wrap: 'truncate-end', children: [modelLine(agent)] }),
         Text({ dimColor: true, wrap: 'truncate-end', children: [summary(agent, history.get(agent.type), now)] }),
         Text({ dimColor: true, children: [rule] }),
         ...lines.map(line =>

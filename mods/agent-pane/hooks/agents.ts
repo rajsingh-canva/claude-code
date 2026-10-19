@@ -105,6 +105,32 @@ export function typeColor(type: string, named?: string): string {
   return PALETTE[hash(shortType(type)) % PALETTE.length]!
 }
 
+// 'claude-sonnet-5-5' reads as 'sonnet 5.5', 'claude-haiku-4-5-20251001' as 'haiku 4.5'
+export function shortModel(model: string | undefined): string {
+  if (!model) return ''
+  const bare = model.replace(/\[.*\]$/, '').replace(/^.*\//, '')
+  const named = /claude-([a-z]+)-(\d+)(?:-(\d))?(?:-\d{8})?$/.exec(bare)
+  if (named) return named[3] === undefined ? `${named[1]} ${named[2]}` : `${named[1]} ${named[2]}.${named[3]}`
+  return ['fable', 'opus', 'sonnet', 'haiku'].find(family => bare.includes(family)) ?? bare
+}
+
+// A model family's colour, so a glance tells which tier each agent runs on
+export function modelColor(model: string | undefined): string {
+  const name = model ?? ''
+  if (name.includes('opus')) return '#b07cc6'
+  if (name.includes('sonnet')) return '#3d9be9'
+  if (name.includes('haiku')) return '#81b29a'
+  if (name.includes('fable')) return '#e5a050'
+  return 'subtle'
+}
+
+// 950 → '950', 12_400 → '12.4k', 1_250_000 → '1.3M'
+export function formatTokens(n: number): string {
+  if (n < 1000) return String(Math.round(n))
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`
+  return `${(n / 1_000_000).toFixed(1)}M`
+}
+
 // Keeps the first `cells` cells of a row's parts, ending in … when it cuts
 export function cutParts(parts: readonly Part[], cells: number): Part[] {
   const total = parts.reduce((n, part) => n + width(part.text), 0)
@@ -194,7 +220,7 @@ function ended(agent: PaneAgent, status: Status, now: number): PaneAgent {
 // A finished agent that runs again (a message resumed it) starts a fresh run
 function resumed(agent: PaneAgent, status: Status, now: number): PaneAgent {
   const { finishedAt: _, ...rest } = agent
-  return isActive(agent) ? { ...rest, status } : { ...rest, status, startedAt: now, steps: 0 }
+  return isActive(agent) ? { ...rest, status } : { ...rest, status, startedAt: now, steps: 0, outputTokens: 0 }
 }
 
 export function withStatus(agent: PaneAgent, status: Status, now: number): PaneAgent {
@@ -260,6 +286,7 @@ export function rows(
   if (list.length === 0) return []
   const whoWidth = Math.min(14, Math.max(...list.map(agent => width(who(agent)))))
   const barCells = columns >= 56 ? 8 : 0
+  const modelWidth = columns >= 48 ? Math.min(10, Math.max(...list.map(agent => width(shortModel(agent.model))))) : 0
   const tails = list.map(agent => {
     const pct = estimatePercent(agent, histories.get(agent.type))
     const clock = formatElapsed((agent.finishedAt ?? now) - agent.startedAt)
@@ -275,6 +302,7 @@ export function rows(
       { text: ' ' },
       { text: pad(who(agent), whoWidth), color, isBold: true },
       { text: ' ' },
+      ...(modelWidth > 0 ? [{ text: pad(shortModel(agent.model), modelWidth) + ' ', color: modelColor(agent.model) }] : []),
     ]
     const headWidth = width(head.map(p => p.text).join(''))
     const descWidth = columns - headWidth - tailWidth - 1
@@ -292,6 +320,15 @@ export function summary(agent: PaneAgent, history: readonly number[] | undefined
   const parts = [statusWord(agent.status), clock]
   if (agent.status === 'running') parts.push(`~${estimatePercent(agent, history)}%`)
   parts.push(`${agent.steps} request${agent.steps === 1 ? '' : 's'}`)
+  if (agent.outputTokens) parts.push(`${formatTokens(agent.outputTokens)} out`)
+  return parts.join(' · ')
+}
+
+// The open agent's model line: model, effort and how full its context is
+export function modelLine(agent: PaneAgent): string {
+  const parts = [shortModel(agent.model) || 'model unknown']
+  if (agent.effort) parts.push(`${agent.effort} effort`)
+  if (agent.contextTokens) parts.push(`${formatTokens(agent.contextTokens)} context`)
   return parts.join(' · ')
 }
 

@@ -2,7 +2,7 @@ import type { AgentInfo, On, SessionMessage } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import type { PaneAgent } from '../types'
-import { estimatePercent, merge, rows, toolArg, transcript, who, wrap } from '../hooks/agents.ts'
+import { cutParts, estimatePercent, formatTokens, merge, rows, shortModel, toolArg, transcript, typeColor, who, wrap } from '../hooks/agents.ts'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const PANE = {
@@ -21,7 +21,7 @@ const SPAWN = {
   background: true,
   fork: false,
 } as const
-const USAGE = { model: 'claude-haiku-4-5', input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+const USAGE = { model: 'claude-haiku-4-5', input_tokens: 300, output_tokens: 1200, cache_read_input_tokens: 4000, cache_creation_input_tokens: 0 }
 const TRANSCRIPT: SessionMessage[] = [
   { role: 'user', text: 'Find the auth code', toolUses: [] },
   { role: 'assistant', text: 'Looking in src.', toolUses: [{ tool_use_id: 'toolu_g', tool: 'Grep', input: { pattern: 'login' } }] },
@@ -132,6 +132,37 @@ describe('helpers', () => {
     for (const row of drawn) expect([...row.label].length).toBeLessThanOrEqual(60)
   })
 
+  test('row parts carry colours and join to the label', () => {
+    const [row] = rows([agent({ model: 'claude-sonnet-5-5', steps: 3 })], new Map(), 1000, 60)
+    expect(row!.parts.map(p => p.text).join('')).toBe(row!.label)
+    expect(row!.parts.find(p => p.text.startsWith('Explore'))?.color).toBe(typeColor('Explore'))
+    expect(row!.parts.find(p => p.text === '●')?.color).toBe('claude')
+    expect(row!.label).toContain('sonnet 5.5')
+  })
+
+  test('a type keeps its colour and a definition colour wins', () => {
+    expect(typeColor('Explore')).toBe(typeColor('plugin:Explore'))
+    expect(typeColor('Explore', 'blue')).toBe('#3d9be9')
+  })
+
+  test('cutParts ends in an ellipsis at the width', () => {
+    const cut = cutParts([{ text: 'abc' }, { text: 'defgh', color: 'red' }], 6)
+    expect(cut.map(p => p.text)).toEqual(['abc', 'de…'])
+    expect(cut[1]!.color).toBe('red')
+  })
+
+  test('models and tokens read short', () => {
+    expect(shortModel('claude-sonnet-5-5')).toBe('sonnet 5.5')
+    expect(shortModel('claude-haiku-4-5-20251001')).toBe('haiku 4.5')
+    expect(shortModel('claude-opus-5-5[1m]')).toBe('opus 5.5')
+    expect(shortModel('us.anthropic.claude-fable-5-1')).toBe('fable 5.1')
+    expect(shortModel(undefined)).toBe('')
+    expect(formatTokens(950)).toBe('950')
+    expect(formatTokens(2400)).toBe('2.4k')
+    expect(formatTokens(12_400)).toBe('12k')
+    expect(formatTokens(1_250_000)).toBe('1.3M')
+  })
+
   test('teammates go by their name', () => {
     expect(who(agent({ isTeammate: true, name: 'reviewer', type: 'teammate' }))).toBe('reviewer')
     expect(who(agent({ type: 'plugin:code-reviewer' }))).toBe('code-reviewer')
@@ -175,6 +206,7 @@ describe('pane', () => {
       const buttons = await ui.findAll({ type: 'Button' })
       expect(buttons.map((b: { key: string }) => b.key).sort()).toEqual(['agent:a1', 'agent:a2'])
       expect(String((await ui.find({ key: 'agent:a1' }))?.props.label)).toContain('find auth code')
+      expect(String((await ui.find({ key: 'agent:a1' }))?.props.label)).toContain('haiku 4.5')
       await ui.unmount()
     }
   })
@@ -201,7 +233,8 @@ describe('pane', () => {
       await ui.press({ key: 'agent:a1' })
       expect(await ui.find({ key: 'back' })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /Explore · find auth code/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /running · 0:00 · ~13% · 2 requests/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /running · 0:00 · ~13% · 2 requests · 2.4k out/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'haiku 4.5 · 4.3k context' })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: 'It lives in src/auth.ts.' })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: '→ Grep login' })).toBeDefined()
       await ui.press({ key: 'back' })
