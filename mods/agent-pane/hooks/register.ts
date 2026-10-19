@@ -1,24 +1,61 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, TurnCompleteReason } from 'claude-code'
 
-import type { PaneAgent } from '../types'
-import { type Line, type Status, glyph, isActive, merge, pushHistory, rows, summary, transcript, who, withStatus } from './agents.ts'
+import type { PaneAgent, RosterAgent } from '../types'
+import {
+  type Line,
+  type Part,
+  type Status,
+  glyph,
+  isActive,
+  mascots,
+  merge,
+  modelColor,
+  modelLine,
+  progressLine,
+  pushHistory,
+  rows,
+  shortModel,
+  shortType,
+  sprite,
+  statusColor,
+  summary,
+  transcript,
+  typeColor,
+  who,
+  withStatus,
+} from './agents.ts'
+import { type Definition, type Offer, buildRoster, paint, parseDefinition, rosterRows, runsText } from './roster.ts'
 
 const PANE = 'agents'
 const TITLE = 'Agents'
 const COMMAND = 'agent-pane'
 const HISTORY_PREFIX = 'hist:'
-// Rows the open agent's view spends around its transcript: name, summary, two rules, field, notice
-const DETAIL_CHROME = 6
+// Rows the open agent's view spends around its transcript: Back, the card
+// (four lines and its border), two rules, field, notice
+const DETAIL_CHROME = 11
+// The card's border and padding, plus the sprite and the gap after it
+const CARD_CHROME = 4 + 5 + 1
 
 const agents = atom({ plugin: 'agent-pane', key: 'agents' } as const, [] as PaneAgent[])
 const selected = atom({ plugin: 'agent-pane', key: 'selected' } as const, '')
 const draft = atom({ plugin: 'agent-pane', key: 'draft' } as const, '')
 const notice = atom({ plugin: 'agent-pane', key: 'notice' } as const, '')
 const isDismissed = atom({ plugin: 'agent-pane', key: 'isDismissed' } as const, false)
+const roster = atom({ plugin: 'agent-pane', key: 'roster' } as const, [] as RosterAgent[])
+
+const DEF_PREFIX = 'def:'
+// Where agent definitions live, project first so its definition wins a name
+const AGENT_DIRS = [
+  { dir: '.claude/agents', source: 'project' },
+  { dir: '~/.claude/agents', source: 'user' },
+] as const
 
 // Completed step counts per agent type, mirrored from $.store
 const history = new Map<string, number[]>()
+// Agent definition files read at session start, and the types the engine offered
+let definitions: Definition[] = []
+const offers = new Map<string, Offer>()
 let tick: { cancel: () => void } | undefined
 
 function numbers(value: unknown): number[] {
@@ -39,6 +76,33 @@ async function saveHistory($: EngineInterface, type: string, count: number) {
   const updated = pushHistory(numbers(await $.store.get(HISTORY_PREFIX + type)), count)
   history.set(type, updated)
   await $.store.set(HISTORY_PREFIX + type, updated)
+  await refreshRoster($)
+}
+
+async function loadDefinitions($: EngineInterface, cwd: string) {
+  const home = await $.env.get('HOME')
+  const found: Definition[] = []
+  for (const { dir, source } of AGENT_DIRS) {
+    const path = dir.startsWith('~/') ? (home ? `${home}/${dir.slice(2)}` : undefined) : `${cwd}/${dir}`
+    if (path === undefined) continue
+    try {
+      for (const entry of await $.fs.list(path)) {
+        if (entry.kind !== 'file' || !entry.name.endsWith('.md')) continue
+        const def = parseDefinition(await $.fs.read(`${path}/${entry.name}`), source)
+        if (def) found.push(def)
+      }
+    } catch {
+      // A missing or unreadable folder just has no definitions
+    }
+  }
+  definitions = found
+}
+
+// Rebuilds the roster and gives the pane's agents their definitions' colours
+async function refreshRoster($: EngineInterface) {
+  const built = buildRoster(definitions, offers.values(), history)
+  await update($, roster, () => built)
+  await update($, agents, list => paint(list, built))
 }
 
 function stopTick() {
@@ -55,7 +119,8 @@ async function sync($: EngineInterface) {
   } catch {
     // Keep what the events reported when the list is unavailable
   }
-  const list = await update($, agents, current => merge(current, listed, now))
+  const known = await read($, roster)
+  const list = await update($, agents, current => paint(merge(current, listed, now), known))
   if (!list.some(isActive)) stopTick()
 }
 
@@ -108,6 +173,8 @@ export const register: Register = on => {
       description: 'Show your agents in a pane: open one to read its transcript or message it',
     })
     await loadHistory($)
+    await loadDefinitions($, e.cwd)
+    await refreshRoster($)
     // After a reload the module starts empty, so pick up agents already running
     await sync($)
     if ((await read($, agents)).some(isActive)) {
@@ -147,9 +214,11 @@ export const register: Register = on => {
       isTeammate: e.isTeammate === true,
       startedAt: now,
       steps: 0,
+      model: spawned.model ?? e.model ?? e.parentModel,
     }
     if (e.name !== undefined) agent.name = e.name
-    await update($, agents, list => (list.some(a => a.id === id) ? list : [...list, agent]))
+    const known = await read($, roster)
+    await update($, agents, list => (list.some(a => a.id === id) ? list : paint([...list, agent], known)))
     startTick($)
     await openUnasked($)
     return spawned
@@ -157,18 +226,51 @@ export const register: Register = on => {
     // The agent has started by the time anything here can fail: answer with that spawn, never a second one
     .catch(($, e, next) => next(e))
 
-  // Each model request an agent makes is one step towards its estimate
+  // Each agent type offered to the model joins the roster: plugin agents and
+  // ones from settings, which have no definition file this mod reads
+  on('agent.offer', async ($, e, next) => {
+    const isNew = !offers.has(e.agent)
+    offers.set(e.agent, { name: e.agent, description: e.description, source: e.source })
+    if (isNew) await refreshRoster($)
+    return next(e)
+  })
+    // The roster is a nicety: never let it change what the model is offered
+    .catch(($, e, next) => next(e))
+
+  // Each model request an agent makes is one step towards its estimate, and
+  // says which model and effort it ran on and what it cost
   on('turn.step', async function* ($, e, next) {
     const id = e.agentId
-    if (id !== undefined && (await read($, agents)).some(a => a.id === id)) {
+    const isOurs = id !== undefined && (await read($, agents)).some(a => a.id === id)
+    if (isOurs) {
       const now = await $.clock.now()
+      const effort = e.effort === undefined ? undefined : String(e.effort)
       // max() keeps a retried request from counting twice; a step of a finished agent means it was resumed
       await update($, agents, list =>
-        list.map(a => (a.id === id ? { ...withStatus(a, 'running', now), steps: Math.max(isActive(a) ? a.steps : 0, e.index + 1) } : a)),
+        list.map(a =>
+          a.id === id
+            ? {
+                ...withStatus(a, 'running', now),
+                steps: Math.max(isActive(a) ? a.steps : 0, e.index + 1),
+                model: e.model,
+                ...(effort === undefined ? {} : { effort }),
+              }
+            : a,
+        ),
       )
       startTick($)
     }
-    return yield* next(e)
+    const result = yield* next(e)
+    const usage = result.usage
+    if (isOurs && usage) {
+      const context = usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens
+      await update($, agents, list =>
+        list.map(a =>
+          a.id === id ? { ...a, outputTokens: (a.outputTokens ?? 0) + usage.output_tokens, contextTokens: context } : a,
+        ),
+      )
+    }
+    return result
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -192,22 +294,117 @@ export const register: Register = on => {
     const openId = await read($, selected)
     const agent = list.find(a => a.id === openId)
 
+    // A row's coloured runs; a dim row keeps the colour of its keepColor parts and dims the rest
+    const runs = (parts: readonly Part[], isDim = false) =>
+      parts.map((part, i) =>
+        Text({
+          key: `p${i}`,
+          ...(part.color === undefined ? {} : { color: part.color }),
+          bold: part.isBold === true && !isDim,
+          dimColor: part.isDim === true || (isDim && part.keepColor !== true),
+          wrap: 'truncate-end',
+          children: [part.text],
+        }),
+      )
+    const known = await read($, roster)
+
+    if (openId.startsWith(DEF_PREFIX)) {
+      const def = known.find(r => r.name === openId.slice(DEF_PREFIX.length))
+      if (def !== undefined) {
+        const color = typeColor(def.name, def.color)
+        return Box({
+          flexDirection: 'column',
+          children: [
+            Button({ key: 'back', label: '← Agents', plain: true, dimColor: true, onPress: () => open($, '') }),
+            Box({
+              key: 'card',
+              flexDirection: 'row',
+              gap: 1,
+              paddingX: 1,
+              borderStyle: 'round',
+              borderColor: color,
+              children: [
+                Box({
+                  flexDirection: 'column',
+                  children: sprite(def.name, 'idle', now).map((line, i) => Text({ key: `s${i}`, color, children: [line] })),
+                }),
+                Box({
+                  flexDirection: 'column',
+                  flexGrow: 1,
+                  children: [
+                    Text({ color, bold: true, wrap: 'truncate-end', children: [def.name] }),
+                    Text({ color: modelColor(def.model), wrap: 'truncate-end', children: [shortModel(def.model) || 'inherits model'] }),
+                    Text({ dimColor: true, wrap: 'truncate-end', children: [`${runsText(def)} · ${def.source}`] }),
+                  ],
+                }),
+              ],
+            }),
+            ...(def.description ? [Text({ wrap: 'wrap', children: [def.description] })] : []),
+            Text({ dimColor: true, wrap: 'wrap', children: [`Ask Claude for it: "use the ${def.name} agent to …"`] }),
+          ],
+        })
+      }
+    }
+
     if (agent === undefined) {
       const running = list.filter(isActive).length
-      const head = list.length === 0 ? 'No agents yet' : `${list.length} agent${list.length === 1 ? '' : 's'} · ${running} running`
+      const head = list.length === 0 ? 'No agents running' : `${list.length} agent${list.length === 1 ? '' : 's'} · ${running} running`
       const lines = rows(list, history, now, columns, e.props.view.agentId)
+      const runningNames = new Set(list.filter(isActive).map(a => shortType(a.type)))
+      const yours = rosterRows(known, runningNames, columns, now)
+      const strip = mascots(list, now, columns)
+      const hint =
+        list.length > 0 ? 'Open one to read it or message it.' : known.length > 0 ? 'Open one of yours to see it.' : 'Agents show here as they start.'
       return Box({
         flexDirection: 'column',
         children: [
           Text({ bold: true, wrap: 'truncate-end', children: [head] }),
+          ...(strip.length > 0
+            ? [
+                Box({
+                  key: 'mascots',
+                  flexDirection: 'row',
+                  gap: 1,
+                  children: strip.map(m =>
+                    Box({
+                      key: `m:${m.id}`,
+                      flexDirection: 'column',
+                      children: [
+                        ...m.lines.map((line, i) =>
+                          Text({ key: `l${i}`, color: i === 1 ? m.faceColor : m.color, children: [line] }),
+                        ),
+                        Text({ key: 'name', color: m.color, bold: !m.isDim, wrap: 'truncate-end', children: [m.name] }),
+                      ],
+                    }),
+                  ),
+                }),
+              ]
+            : []),
           ...lines.map(row =>
-            Button({ key: `agent:${row.id}`, label: row.label, plain: true, dimColor: row.isDim, onPress: () => open($, row.id) }),
+            Button({
+              key: `agent:${row.id}`,
+              label: row.label,
+              plain: true,
+              onPress: () => open($, row.id),
+              children: runs(row.parts, row.isDim),
+            }),
           ),
-          Text({
-            dimColor: true,
-            wrap: 'truncate-end',
-            children: [list.length === 0 ? 'Agents show here as they start.' : 'Open one to read it or message it.'],
-          }),
+          ...(yours.rows.length > 0
+            ? [
+                Text({ key: 'yours', bold: true, wrap: 'truncate-end', children: ['Your agents'] }),
+                ...yours.rows.map(row =>
+                  Button({
+                    key: `${DEF_PREFIX}${row.name}`,
+                    label: row.label,
+                    plain: true,
+                    onPress: () => open($, DEF_PREFIX + row.name),
+                    children: runs(row.parts),
+                  }),
+                ),
+                ...(yours.hidden > 0 ? [Text({ dimColor: true, children: [`  +${yours.hidden} more`] })] : []),
+              ]
+            : []),
+          Text({ dimColor: true, wrap: 'truncate-end', children: [hint] }),
         ],
       })
     }
@@ -216,6 +413,8 @@ export const register: Register = on => {
     const room = Math.max(3, e.props.scroll.bodyRows - DETAIL_CHROME)
     const lines: Line[] = Array.isArray(found) ? transcript(found, columns, room) : [{ text: found.deny, isDim: true }]
     const rule = '─'.repeat(Math.max(1, columns))
+    const color = typeColor(agent.type, agent.color)
+    const barCells = Math.max(4, Math.min(20, columns - CARD_CHROME - 12))
     const typed = await read($, draft)
     const said = await read($, notice)
     // The mobile app draws no field, so there the transcript is read-only
@@ -235,15 +434,45 @@ export const register: Register = on => {
     return Box({
       flexDirection: 'column',
       children: [
+        Button({ key: 'back', label: '← Agents', plain: true, dimColor: true, onPress: () => open($, '') }),
         Box({
+          key: 'card',
           flexDirection: 'row',
           gap: 1,
+          paddingX: 1,
+          borderStyle: 'round',
+          borderColor: color,
           children: [
-            Button({ key: 'back', label: '← Agents', plain: true, dimColor: true, onPress: () => open($, '') }),
-            Text({ bold: true, wrap: 'truncate-end', children: [`${glyph(agent.status)} ${who(agent)} · ${agent.description}`] }),
+            Box({
+              flexDirection: 'column',
+              children: sprite(agent.type, agent.status, now).map((line, i) =>
+                Text({ key: `s${i}`, color: i === 1 ? statusColor(agent.status) : color, children: [line] }),
+              ),
+            }),
+            Box({
+              flexDirection: 'column',
+              flexGrow: 1,
+              children: [
+                Text({
+                  wrap: 'truncate-end',
+                  children: [
+                    Text({ color: statusColor(agent.status), children: [glyph(agent.status)] }),
+                    ' ',
+                    Text({ color, bold: true, children: [who(agent)] }),
+                    ` · ${agent.description}`,
+                  ],
+                }),
+                Text({ color: modelColor(agent.model), wrap: 'truncate-end', children: [modelLine(agent)] }),
+                Text({
+                  color: agent.status === 'running' ? color : statusColor(agent.status),
+                  wrap: 'truncate-end',
+                  children: [progressLine(agent, history.get(agent.type), barCells)],
+                }),
+                Text({ dimColor: true, wrap: 'truncate-end', children: [summary(agent, history.get(agent.type), now)] }),
+              ],
+            }),
           ],
         }),
-        Text({ dimColor: true, wrap: 'truncate-end', children: [summary(agent, history.get(agent.type), now)] }),
         Text({ dimColor: true, children: [rule] }),
         ...lines.map(line =>
           Text({ dimColor: line.isDim === true, bold: line.isUser === true, wrap: 'truncate-end', children: [line.text] }),
