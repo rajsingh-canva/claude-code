@@ -8,6 +8,7 @@ import {
   type Status,
   glyph,
   isActive,
+  mascots,
   merge,
   modelColor,
   modelLine,
@@ -293,14 +294,14 @@ export const register: Register = on => {
     const openId = await read($, selected)
     const agent = list.find(a => a.id === openId)
 
-    // A row's coloured runs; a dim row keeps its status colour (`keep`) and dims the rest
-    const runs = (parts: readonly Part[], isDim = false, keep = -1) =>
+    // A row's coloured runs; a dim row keeps the colour of its keepColor parts and dims the rest
+    const runs = (parts: readonly Part[], isDim = false) =>
       parts.map((part, i) =>
         Text({
           key: `p${i}`,
           ...(part.color === undefined ? {} : { color: part.color }),
           bold: part.isBold === true && !isDim,
-          dimColor: part.isDim === true || (isDim && i !== keep),
+          dimColor: part.isDim === true || (isDim && part.keepColor !== true),
           wrap: 'truncate-end',
           children: [part.text],
         }),
@@ -350,20 +351,42 @@ export const register: Register = on => {
       const head = list.length === 0 ? 'No agents running' : `${list.length} agent${list.length === 1 ? '' : 's'} · ${running} running`
       const lines = rows(list, history, now, columns, e.props.view.agentId)
       const runningNames = new Set(list.filter(isActive).map(a => shortType(a.type)))
-      const yours = rosterRows(known, runningNames, columns)
+      const yours = rosterRows(known, runningNames, columns, now)
+      const strip = mascots(list, now, columns)
       const hint =
         list.length > 0 ? 'Open one to read it or message it.' : known.length > 0 ? 'Open one of yours to see it.' : 'Agents show here as they start.'
       return Box({
         flexDirection: 'column',
         children: [
           Text({ bold: true, wrap: 'truncate-end', children: [head] }),
+          ...(strip.length > 0
+            ? [
+                Box({
+                  key: 'mascots',
+                  flexDirection: 'row',
+                  gap: 1,
+                  children: strip.map(m =>
+                    Box({
+                      key: `m:${m.id}`,
+                      flexDirection: 'column',
+                      children: [
+                        ...m.lines.map((line, i) =>
+                          Text({ key: `l${i}`, color: i === 1 ? m.faceColor : m.color, children: [line] }),
+                        ),
+                        Text({ key: 'name', color: m.color, bold: !m.isDim, wrap: 'truncate-end', children: [m.name] }),
+                      ],
+                    }),
+                  ),
+                }),
+              ]
+            : []),
           ...lines.map(row =>
             Button({
               key: `agent:${row.id}`,
               label: row.label,
               plain: true,
               onPress: () => open($, row.id),
-              children: runs(row.parts, row.isDim, 1),
+              children: runs(row.parts, row.isDim),
             }),
           ),
           ...(yours.rows.length > 0

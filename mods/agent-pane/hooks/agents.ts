@@ -8,7 +8,10 @@ import type { PaneAgent } from '../types'
 export type Status = PaneAgent['status']
 export type Line = { text: string; isDim?: boolean; isUser?: boolean }
 // One run of a row in one colour; a row's parts joined are its label
-export type Part = { text: string; color?: string; isBold?: boolean; isDim?: boolean }
+// keepColor: the part keeps its colour when its row is dimmed (a finished agent's status and mascot)
+export type Part = { text: string; color?: string; isBold?: boolean; isDim?: boolean; keepColor?: boolean }
+// One mascot in the strip above the list: its sprite, name and colours
+export type Mascot = { id: string; lines: string[]; name: string; color: string; faceColor: string; isDim: boolean }
 export type Row = { id: string; label: string; parts: Part[]; isDim: boolean }
 
 // Expected model requests for an agent type with too little history
@@ -146,12 +149,41 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`
 }
 
-// The agent's three-line sprite at `now`, one frame a second
+// A mascot's face for a status at `now`, one frame a second
+export function face(status: Status, now: number): string {
+  const frames = FACES[status]
+  return frames[Math.floor(now / 1000) % frames.length]!
+}
+
+// The agent's three-line sprite at `now`
 export function sprite(type: string, status: Status, now: number): string[] {
   const h = hash(shortType(type))
-  const frames = FACES[status]
-  const face = frames[Math.floor(now / 1000) % frames.length]!
-  return [SPRITE_TOPS[h % SPRITE_TOPS.length]!, face, SPRITE_BODIES[Math.floor(h / SPRITE_TOPS.length) % SPRITE_BODIES.length]!]
+  return [SPRITE_TOPS[h % SPRITE_TOPS.length]!, face(status, now), SPRITE_BODIES[Math.floor(h / SPRITE_TOPS.length) % SPRITE_BODIES.length]!]
+}
+
+// Cells per mascot in the strip, and the gap between them
+export const MASCOT_CELLS = 9
+const MASCOT_GAP = 1
+
+function center(text: string, cells: number): string {
+  const cut = truncate(text, cells)
+  const left = Math.floor((cells - width(cut)) / 2)
+  return ' '.repeat(left) + cut + ' '.repeat(cells - width(cut) - left)
+}
+
+// The strip of mascots above the list: running agents first, as many as fit the width
+export function mascots(agents: readonly PaneAgent[], now: number, columns: number): Mascot[] {
+  const fit = Math.floor((columns + MASCOT_GAP) / (MASCOT_CELLS + MASCOT_GAP))
+  return ordered(agents)
+    .slice(0, Math.max(0, fit))
+    .map(agent => ({
+      id: agent.id,
+      lines: sprite(agent.type, agent.status, now).map(line => center(line, MASCOT_CELLS)),
+      name: center(who(agent), MASCOT_CELLS),
+      color: typeColor(agent.type, agent.color),
+      faceColor: statusColor(agent.status),
+      isDim: !isActive(agent),
+    }))
 }
 
 // Keeps the first `cells` cells of a row's parts, ending in … when it cuts
@@ -309,6 +341,7 @@ export function rows(
   if (list.length === 0) return []
   const whoWidth = Math.min(14, Math.max(...list.map(agent => width(who(agent)))))
   const barCells = columns >= 56 ? 8 : 0
+  const hasFace = columns >= 50
   const modelWidth = columns >= 48 ? Math.min(10, Math.max(...list.map(agent => width(shortModel(agent.model))))) : 0
   const tails = list.map(agent => {
     const pct = estimatePercent(agent, histories.get(agent.type))
@@ -321,9 +354,10 @@ export function rows(
     const isViewed = agent.id === viewedId
     const head: Part[] = [
       { text: isViewed ? '▸' : ' ', color: 'claude' },
-      { text: glyph(agent.status), color: statusColor(agent.status) },
+      { text: glyph(agent.status), color: statusColor(agent.status), keepColor: true },
       { text: ' ' },
-      { text: pad(who(agent), whoWidth), color, isBold: true },
+      ...(hasFace ? [{ text: face(agent.status, now), color, keepColor: true }, { text: ' ' }] : []),
+      { text: pad(who(agent), whoWidth), color, isBold: true, keepColor: true },
       { text: ' ' },
       ...(modelWidth > 0 ? [{ text: pad(shortModel(agent.model), modelWidth) + ' ', color: modelColor(agent.model) }] : []),
     ]

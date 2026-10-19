@@ -3,7 +3,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 
 import type { PaneAgent } from '../types'
 import { buildRoster, paint, parseDefinition, rosterRows, runsText } from '../hooks/roster.ts'
-import { cutParts, estimatePercent, formatTokens, merge, progressLine, rows, shortModel, sprite, toolArg, transcript, typeColor, who, wrap } from '../hooks/agents.ts'
+import { MASCOT_CELLS, cutParts, estimatePercent, formatTokens, mascots, merge, progressLine, rows, shortModel, sprite, toolArg, transcript, typeColor, who, wrap } from '../hooks/agents.ts'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const PANE = {
@@ -188,6 +188,33 @@ describe('helpers', () => {
     expect(sprite('Explore', 'failed', 0)[1]).toBe('(×_×)')
   })
 
+  test('rows wear their mascot face and a finished row keeps its colours', () => {
+    const [running, done] = rows(
+      [agent({ id: 'a1' }), agent({ id: 'a2', type: 'Plan', status: 'completed', startedAt: 0, finishedAt: 1000 })],
+      new Map(),
+      0,
+      70,
+    )
+    expect(running!.label).toContain('(•‿•) Explore')
+    expect(done!.label).toContain('(^‿^) Plan')
+    expect(done!.parts.filter(p => p.keepColor).map(p => p.text.trim())).toEqual(['✓', '(^‿^)', 'Plan'])
+    expect(rows([agent({})], new Map(), 0, 40)[0]!.label).not.toContain('(•‿•)')
+  })
+
+  test('the mascot strip fits the width, running agents first', () => {
+    const list = [
+      agent({ id: 'a1', status: 'completed', startedAt: 0, finishedAt: 1 }),
+      agent({ id: 'a2', type: 'Plan', startedAt: 5 }),
+      agent({ id: 'a3', type: 'general-purpose', startedAt: 9 }),
+    ]
+    const strip = mascots(list, 0, 2 * MASCOT_CELLS + 1)
+    expect(strip.map(m => m.id)).toEqual(['a3', 'a2'])
+    for (const m of strip) for (const line of [...m.lines, m.name]) expect([...line].length).toBe(MASCOT_CELLS)
+    expect(strip[1]!.lines[1]!.trim()).toBe('(•‿•)')
+    expect(strip[1]!.name.trim()).toBe('Plan')
+    expect(mascots(list, 0, 5)).toEqual([])
+  })
+
   test('the progress line fills when done', () => {
     expect(progressLine(agent({ steps: 3 }), [10, 10, 10], 10)).toBe('███░░░░░░░ ~30%')
     expect(progressLine(agent({ status: 'completed' }), undefined, 4)).toBe('████ done')
@@ -241,10 +268,12 @@ describe('helpers', () => {
 
   test('roster rows mark running agents and fold the rest', () => {
     const roster = ['a', 'b', 'c'].map(name => ({ name, description: '', source: 'user', runs: 0 }))
-    const { rows: drawn, hidden } = rosterRows(roster, new Set(['b']), 50, 2)
+    const { rows: drawn, hidden } = rosterRows(roster, new Set(['b']), 50, 0, 2)
     expect(drawn.map(r => r.name)).toEqual(['a', 'b'])
     expect(drawn[1]!.label).toContain('● running')
     expect(drawn[0]!.label).toContain('not run yet')
+    expect(drawn[0]!.label).toContain('(·_·)')
+    expect(drawn[1]!.label).toContain('(•‿•)')
     expect(hidden).toBe(1)
   })
 
@@ -292,6 +321,9 @@ describe('pane', () => {
       expect(buttons.map((b: { key: string }) => b.key).sort()).toEqual(['agent:a1', 'agent:a2'])
       expect(String((await ui.find({ key: 'agent:a1' }))?.props.label)).toContain('find auth code')
       expect(String((await ui.find({ key: 'agent:a1' }))?.props.label)).toContain('haiku 4.5')
+      expect(await ui.find({ key: 'mascots' })).toBeDefined()
+      expect(await ui.find({ key: 'm:a1' })).toBeDefined()
+      expect(await ui.find({ key: 'm:a2' })).toBeDefined()
       await ui.unmount()
     }
   })

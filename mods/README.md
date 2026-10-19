@@ -40,11 +40,15 @@ While you're idle it shows one toast before the cache goes cold: 5 minutes ahead
 
 ```
 2 agents · 1 running
- ● Explore  haiku 4.5  find auth code  ████░░░░ ~48%  0:42
-▸✓ Plan     opus 5.5   design the pane           done  1:10
+    ●       ◠ ◠
+  (•‿•)    (^‿^)
+   ▐█▌     /▓\
+ Explore    Plan
+ ● (•‿•) Explore haiku 4.5  find auth code  ████░░░░ ~48%  0:42
+▸✓ (^‿^) Plan    opus 5.5   design the pane           done  1:10
 Your agents
- ■ researcher    opus     ran 6× · ~12 steps
- ■ test-writer   sonnet   not run yet
+ (·_·) researcher    opus     ran 6× · ~12 steps
+ (·_·) test-writer   sonnet   not run yet
 Open one to read it or message it.
 ```
 
@@ -69,7 +73,7 @@ The pane lists the session's subagents and teammates, running ones first, with t
 
 Colours: the status glyph and word use your theme's status colours (running, waiting, done, failed). Each agent type has its own colour for its name, bar and card, taken from its definition's `color:` frontmatter when it has one, otherwise picked from a palette by its name so it never changes. The model chip is coloured by family: opus, sonnet, haiku, fable.
 
-Each type also gets a text sprite: its top and body are fixed per type, and its face shows status (`(•‿•)` running and blinking, `(-_-)` idle, `(^‿^)` done, `(×_×)` failed). The open agent's card shows its model, effort, context size, output tokens and a progress bar.
+Each type also gets a mascot, a text sprite: its top and body are fixed per type, and its face shows status (`(•‿•)` running and blinking, `(-_-)` idle, `(^‿^)` done, `(×_×)` failed). A strip of mascots heads the list, running agents first and as many as fit the width; each row and roster line wears its mascot's face too. Finished agents keep their colours, with only the task and clock dimmed. The open agent's card shows its model, effort, context size, output tokens and a progress bar.
 
 **Your agents** lists the agent types you can call on: definitions in `.claude/agents/` and `~/.claude/agents/`, plugin agents Claude Code offers, and any built-in you have run, most-run first with their run count and typical steps. Ones running now are marked. Open one for its card and description.
 

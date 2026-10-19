@@ -3,7 +3,7 @@
 // Nothing here touches `$`, so the tests can call them directly.
 
 import type { PaneAgent, RosterAgent } from '../types'
-import { HISTORY_SIZE, MIN_SAMPLES, type Part, cutParts, median, modelColor, shortModel, shortType, typeColor } from './agents.ts'
+import { HISTORY_SIZE, MIN_SAMPLES, type Part, cutParts, face, median, modelColor, shortModel, shortType, typeColor } from './agents.ts'
 
 // One agent definition file's frontmatter
 export type Definition = Pick<RosterAgent, 'name' | 'description' | 'model' | 'color' | 'source'>
@@ -109,12 +109,13 @@ function pad(text: string, cells: number): string {
 
 export type RosterRow = { name: string; label: string; parts: Part[] }
 
-// One line per roster agent: a colour swatch, its name, model and runs, with
-// the ones running now marked; at most `maxRows`, the rest counted
+// One line per roster agent: its mascot's face in its colour (awake while one
+// runs), its name, model and runs; at most `maxRows`, the rest counted
 export function rosterRows(
   roster: readonly RosterAgent[],
   runningNames: ReadonlySet<string>,
   columns: number,
+  now = 0,
   maxRows = MAX_ROSTER_ROWS,
 ): { rows: RosterRow[]; hidden: number } {
   const shown = roster.slice(0, Math.max(0, maxRows))
@@ -127,7 +128,7 @@ export function rosterRows(
     const parts = cutParts(
       [
         { text: ' ' },
-        { text: '■', color },
+        { text: face(isRunning ? 'running' : 'pending', now), color },
         { text: ' ' },
         { text: pad(r.name, nameWidth), color, isBold: true },
         { text: ' ' },
