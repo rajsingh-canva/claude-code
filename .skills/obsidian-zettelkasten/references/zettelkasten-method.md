@@ -19,19 +19,19 @@ Based on Sonke Ahrens' *How to Take Smart Notes* and Odysseas' Obsidian implemen
 
 ### Rough Notes (Fleeting)
 - Temporary jottings: ideas, reminders, reading lists, daily tracking
-- Stored in `Rough Notes/` folder
+- Stored in `1 - Rough Notes/`
 - Disposable — not meant to persist long-term
 
 ### Source Notes (Literature)
 - Created while consuming material (books, articles, videos, podcasts)
 - Contain: page numbers, exact quotes, and your own elaboration in your own words
-- Stored in `Source Material/` folder
+- Stored in `2 - Source Material/` (subfolders by kind)
 - Context-dependent — tied to a specific source
 
 ### Main Notes (Permanent / Zettelkasten)
 - Independent, self-explanatory "mini-essays" on a single idea
 - Extracted from source notes but must stand alone without context
-- Stored in `Main Notes/` folder (the single flat Zettelkasten folder)
+- Stored in `6 - Main Notes/` (the single flat Zettelkasten folder)
 - Maximum ~500 words, one core idea per note
 - These are the building blocks for future writing projects
 
@@ -62,4 +62,4 @@ Based on Sonke Ahrens' *How to Take Smart Notes* and Odysseas' Obsidian implemen
 - Every main note links to related notes in a "References" section at the bottom
 - Every main note links back to its source material note
 - Links use Obsidian's `[[ ]]` wiki-link syntax
-- When a tag accumulates 50+ linked notes, promote it to an Index with subheadings
+- When a tag accumulates 50+ linked notes, promote it to an Index note (in `4 - Indexes/<category>/`) with subheadings
