@@ -10,10 +10,10 @@ const WRITE_5M = '{"usage":{"cache_creation":{"ephemeral_1h_input_tokens":0,"eph
 const CACHED = { input_tokens: 2, output_tokens: 10, cache_read_input_tokens: 25000, cache_creation_input_tokens: 1200, model: 'claude-opus-5-5' }
 const UNCACHED = { ...CACHED, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
-type World = { tail: string; usage: typeof CACHED | null; statuses: (string | undefined)[]; toasts: string[] }
+type World = { tail: string; usage: typeof CACHED | null; statuses: (string | undefined)[]; toasts: string[]; read: string[] }
 
-// The engine beneath the mod: a clock in memory, a transcript whose tail is
-// `world.tail`, and model responses reporting `world.usage`
+// The engine beneath the mod: a clock in memory, a transcript found by the
+// session's id whose tail is `world.tail`, and model responses reporting `world.usage`
 function engine(on: On, world: World) {
   const clock = mock.clock(on, { now: NOW })
   on('ui.status', (_$, e) => {
@@ -24,20 +24,26 @@ function engine(on: On, world: World) {
     world.toasts.push(e.text)
     return { value: undefined }
   })
-  on('process.run', () => ({ value: { exitCode: 0, stdout: world.tail, stderr: '', isStdoutTruncated: false } }))
+  on('session.id', () => ({ value: 'session-1' }))
+  on('process.run', (_$, e) => {
+    const isLookup = e.argv[0] === 'sh'
+    if (!isLookup) world.read.push(e.argv.at(-1)!)
+    const stdout = isLookup ? `/tmp/${e.argv.at(-1)}.jsonl\n` : world.tail
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false } }
+  })
   on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: world.usage }
   })
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
-  on('classic.Stop', () => ({}))
   on('classic.SessionStart', () => ({}))
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
   return clock
 }
 
 function world(overrides: Partial<World> = {}): World {
-  return { tail: WRITE_1H, usage: CACHED, statuses: [], toasts: [], ...overrides }
+  return { tail: WRITE_1H, usage: CACHED, statuses: [], toasts: [], read: [], ...overrides }
 }
 
 async function start($: any) {
@@ -51,8 +57,8 @@ async function step($: any, agentId?: string) {
   }
 }
 
-async function stop($: any) {
-  await $.classic.Stop({ stop_hook_active: false, transcript_path: '/tmp/session.jsonl' })
+async function complete($: any, agentId?: string) {
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', ...(agentId ? { agentId } : {}) })
 }
 
 describe('helpers', () => {
@@ -122,10 +128,22 @@ test('a 5m cache write in the transcript switches the TTL', async ($, on) => {
   const clock = engine(on, w)
   await start($)
   await step($)
-  await stop($)
+  await complete($)
   expect(w.statuses.at(-1)).toBe('🔥 warm · 5:00 left (5m)')
   await clock.advance(6 * MINUTE)
   expect(w.statuses.at(-1)).toBe('🧊 cold (1m ago)')
+})
+
+test('the transcript is found by the session id and read after main turns only', async ($, on) => {
+  const w = world({ tail: WRITE_5M })
+  engine(on, w)
+  await start($)
+  await step($)
+  await complete($, 'agent-1')
+  expect(w.read).toEqual([])
+  await complete($)
+  expect(w.read).toEqual(['/tmp/session-1.jsonl'])
+  expect(w.statuses.at(-1)).toBe('🔥 warm · 5:00 left (5m)')
 })
 
 test('the ttl option overrides the transcript', { options: { ttl: '5m' } }, async ($, on) => {
@@ -133,7 +151,7 @@ test('the ttl option overrides the transcript', { options: { ttl: '5m' } }, asyn
   engine(on, w)
   await start($)
   await step($)
-  await stop($)
+  await complete($)
   expect(w.statuses.at(-1)).toBe('🔥 warm · 5:00 left (5m)')
 })
 
@@ -170,7 +188,7 @@ test('/clear hides the line', async ($, on) => {
   engine(on, w)
   await start($)
   await step($)
-  await $.classic.SessionStart({ source: 'clear' })
+  await $.session.end({ reason: 'clear', sessionId: 'session-1', resume: { id: 'session-1' } })
   expect(w.statuses.at(-1)).toBe(undefined)
 })
 
