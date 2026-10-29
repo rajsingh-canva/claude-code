@@ -152,8 +152,22 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // /clear, /resume and /branch start the session cost again
-  on('classic.SessionStart', { source: ['clear', 'resume', 'fork'] }, async ($, e, next) => {
+  // /clear ends this session and starts the next at no cost. Hooked here, not
+  // at classic.SessionStart, which the desktop app's built-in plugins pass by
+  on('session.end', { reason: 'clear' }, async ($, e, next) => {
+    const now = await $.clock.now()
+    await writeLedger($, now)
+    // The fetched month already holds what this session spent
+    if (fetched) {
+      fetched = { ...fetched, usedUsd: fetched.usedUsd + Math.max(0, sessionUsd - fetched.sessionUsdAtFetch), sessionUsdAtFetch: 0 }
+    }
+    sessionUsd = 0
+    $.ui.status(statusLine(impact(sessionUsd, factors), await monthFigure($, now)))
+    return next(e)
+  })
+
+  // /resume and /branch start the session cost again
+  on('classic.SessionStart', { source: ['resume', 'fork'] }, async ($, e, next) => {
     await refresh($)
     return next(e)
   })

@@ -37,6 +37,7 @@ function engine(on: On, world: World) {
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
   on('turn.complete', () => ({ text: '' }))
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
   return clock
 }
 
@@ -119,6 +120,19 @@ test('spend since the last fetch is added to the month', async ($, on) => {
   // 73.34 from /usage, plus the 10 spent since the fetch
   expect(w.statuses.at(-1)).toContain('$83.34/$4,000')
   expect(w.fetches).toBe(1)
+})
+
+test('/clear starts the session at no cost and keeps the month', async ($, on) => {
+  const w = world({ usd: 2 })
+  engine(on, w)
+  await start($)
+  await measure($, 12)
+  await $.session.end({ reason: 'clear', sessionId: 'session-1', resume: { id: 'session-1' } })
+  expect(w.statuses.at(-1)).toContain('$0.00 session')
+  expect(w.statuses.at(-1)).toContain('$83.34/$4,000')
+  // The next session's spend adds to the month from zero
+  await measure($, 1)
+  expect(w.statuses.at(-1)).toContain('$84.34/$4,000')
 })
 
 test('/usage is asked again after five minutes', async ($, on) => {

@@ -24,8 +24,24 @@ async function render($: EngineInterface) {
   $.ui.status(statusText(state, now))
 }
 
+// Finds the session's transcript by its id, as classic hooks are given it; the
+// first match under the config folder's projects, cached until /clear
+const FIND_TRANSCRIPT = 'for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/projects/*/"$1".jsonl; do [ -f "$f" ] && echo "$f" && exit 0; done; exit 1'
+let transcriptPath: string | undefined
+
+async function findTranscript($: EngineInterface): Promise<string | undefined> {
+  if (transcriptPath !== undefined) return transcriptPath
+  try {
+    const found = await $.process.run(['sh', '-c', FIND_TRANSCRIPT, 'sh', await $.session.id()])
+    if (found.exitCode === 0 && found.stdout.trim()) transcriptPath = found.stdout.trim()
+  } catch {
+    // Look again after the next turn
+  }
+  return transcriptPath
+}
+
 // Reads the TTL of the latest cache write from the end of the transcript
-async function detectTtl($: EngineInterface, transcriptPath: string) {
+async function detectTtl($: EngineInterface, transcriptPath: string | undefined) {
   if (configuredTtl !== undefined || !transcriptPath) return
   try {
     const tail = await $.process.run(['tail', '-c', TAIL_BYTES, transcriptPath])
@@ -64,16 +80,16 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // A main turn finished: the transcript now holds the latest cache write.
+  // Read here, not at classic.Stop, which the desktop app's built-in plugins pass by
   on('turn.complete', async ($, e, next) => {
     activeTurns.delete(e.turnId)
-    return next(e)
-  })
-
-  // Claude finished responding: the transcript now holds the latest cache write
-  on('classic.Stop', async ($, e, next) => {
-    await detectTtl($, e.transcript_path)
-    await render($)
-    return next(e)
+    const result = await next(e)
+    if (e.agentId === undefined) {
+      await detectTtl($, await findTranscript($))
+      await render($)
+    }
+    return result
   })
 
   // A resumed conversation's cache may still be warm from before
@@ -81,16 +97,19 @@ export const register: Register = (on, options) => {
     if (typeof e.seconds_since_last_response === 'number') {
       state.lastActivityAt = (await $.clock.now()) - e.seconds_since_last_response * 1000
       state.hasCache = true
-      await detectTtl($, e.transcript_path)
+      transcriptPath = e.transcript_path || undefined
+      await detectTtl($, transcriptPath)
     }
     await render($)
     return next(e)
   })
 
-  // /clear starts a conversation with nothing cached yet
-  on('classic.SessionStart', { source: 'clear' }, async ($, e, next) => {
+  // /clear starts a conversation with nothing cached yet. Hooked here, not at
+  // classic.SessionStart, which the desktop app's built-in plugins pass by
+  on('session.end', { reason: 'clear' }, async ($, e, next) => {
     state.lastActivityAt = undefined
     state.hasCache = false
+    transcriptPath = undefined
     warnedAt = undefined
     $.ui.status(undefined)
     return next(e)
